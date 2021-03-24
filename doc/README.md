@@ -30,25 +30,40 @@ For your convinience, you can find complete commands needed for installation of 
 ```bash
 mkdir ~/src
 cd src
-git clone https://github.com/lpryszcz/modPhred
+git clone https://github.com/novoalab/modPhred
 ```
 
-- from [conda (use miniconda3)](https://bioconda.github.io/user/install.html#install-conda): [minimap2 v2.16+](https://github.com/lh3/minimap2), [samtools v1.7+](https://github.com/samtools), [hdf5](https://anaconda.org/anaconda/hdf5)
+- from [conda (use miniconda3)](https://bioconda.github.io/user/install.html#install-conda):
+[minimap2 v2.16+](https://github.com/lh3/minimap2),
+[samtools v1.7+](https://github.com/samtools),
+[hdf5](https://anaconda.org/anaconda/hdf5)
 ```bash
 conda install minimap2 samtools hdf5 wget
 ```
 
-- from pip: [h5py](https://www.h5py.org/), [matplotlib](https://matplotlib.org/), [pysam](https://github.com/pysam-developers/pysam), [pandas](https://pandas.pydata.org/), [fastaindex](https://github.com/lpryszcz/FastaIndex), [seaborn](https://seaborn.pydata.org/)
+- from pip:
+[h5py](https://www.h5py.org/),
+[matplotlib](https://matplotlib.org/),
+[pysam](https://github.com/pysam-developers/pysam),
+[pandas](https://pandas.pydata.org/),
+[seaborn](https://seaborn.pydata.org/)
 ```bash
-pip install h5py matplotlib pysam pandas fastaindex seaborn
+pip install h5py matplotlib pysam pandas seaborn
 ```
 
 - [guppy_basecaller has to be obtained from Nanopore Tech. Software page](https://community.nanoporetech.com/downloads)  
-You can try [this for GPU](https://mirror.oxfordnanoportal.com/software/analysis/ont-guppy_3.4.3_linux64.tar.gz)
- (for GPU basecalling to work, you'll need to install CUDA with NVIDIA drivers, check
- [my medium post for Ubuntu 18.04](https://medium.com/@lpryszcz/containers-with-cuda-support-5467f393649f)
- or [NVIDIA website for other systems](https://docs.nvidia.com/cuda/cuda-installation-guide-linux/index.html))
-or [this for CPU](https://mirror.oxfordnanoportal.com/software/analysis/ont-guppy-cpu_3.4.3_linux64.tar.gz) version. 
+Alternatively, you can try [this for GPU](https://mirror.oxfordnanoportal.com/software/analysis/ont-guppy_4.0.15_linux64.tar.gz)
+or [this for CPU](https://mirror.oxfordnanoportal.com/software/analysis/ont-guppy-cpu_4.0.15_linux64.tar.gz) version. 
+For GPU basecalling to work, you'll need to install CUDA with NVIDIA drivers, 
+[check my blog for instructions for Ubuntu 18.04](https://medium.com/@lpryszcz/containers-with-cuda-support-5467f393649f)
+or [NVIDIA website for other systems](https://docs.nvidia.com/cuda/cuda-installation-guide-linux/index.html). 
+
+- [pyguppyclient](https://github.com/nanoporetech/pyguppyclient)
+Note, the pyguppyclient version has to match the guppy version you are using.
+More information [here](#which-pyguppyclient-version-should-i-install). 
+```bash
+pip install pyguppyclient==0.0.7a1
+```
 
 Beside those, modPhred is using (no need to install separately):
 [matplotlib](https://matplotlib.org/),
@@ -57,15 +72,58 @@ Beside those, modPhred is using (no need to install separately):
 [pyvenn](https://github.com/tctianchi/pyvenn). 
 
 ## Running the pipeline
+ModPhred can process DNA and RNA datasets.
+The only difference between the two is enabling splice-aware alignments for RNA. 
+The type of dataset is dectected automatically from provided guppy config file (`-c / --config`). 
+
+The only required inputs are:
+- reference FastA sequence
+- path(s) containing Fast5 file(s)
+You can provide multiple input Fast5 folders - those will be treated as separate runs/samples.
+If you wish to treat multiple runs as one sample, place your Fast5 files in 1 folder. 
+
+ModPhred can be executed in three modes:
+- local on-the-fly basecalling
+- remote on-the-fly basecalling
+- without basecalling (assuming the Fast5 files were basecalled before)
+
+In order to see detailed description of program parameters, just execute it with `-h` / `--help`.
+
+### Local on-the-fly basecalling
+Here, we assume, that you have guppy already installed in you system.
+ModPhred will start `guppy_basecall_server` in the background and stop it when it isn't needed anymore.  
+
+All you need to do is to provide path to `guppy_basecall_server` (`--host`)
+```bash
+~/src/modPhred/run --host ~/src/ont-guppy_4.0.15/bin/guppy_basecall_server -f reference.fasta -o modPhred/projectName -i input_fast5_folder1 [input_fast5_folder2 ... input_fast5_folderN]
+```
+
+Alternatively, if `guppy_basecall_server` is already running in your machine,
+you can provide just its port (`--port`). 
+```bash
+~/src/modPhred/run --host localhost --port 5555 -f reference.fasta -o modPhred/projectName -i input_fast5_folder1 [input_fast5_folder2 ... input_fast5_folderN]
+```
+
+### Remote on-the-fly basecalling
+Here, we assume the guppy_basecall_server is already running in the remote machine.
+All you need to do is to provide IP address `--host` and port `--port`
+```bash
+~/src/modPhred/run --host 172.21.11.186 --port 5555 -f reference.fasta -o modPhred/projectName -i input_fast5_folder1 [input_fast5_folder2 ... input_fast5_folderN]
+```
+
+### Without basecalling
+Make sure your Fast5 files are basecalled with
+[guppy v3.1.5+ with models trained to detect modifications](/doc#how-to-check-if-my-fast5-files-are-basecalled-with-modifications).
+
 Running modPhred pipeline is as easy as:
 ```bash
 ~/src/modPhred/run -f reference.fasta -o modPhred/projectName -i input_fast5_folder1 [input_fast5_folder2 ... input_fast5_folderN]
 ```
 
-You can provide multiple input Fast5 folders - those will be treated as separate runs/samples.
-If you wish to treat multiple runs as one sample, place your Fast5 files in 1 folder. 
+For more usage examples, please have a look in [test](test) directory. 
 
-This will generate in the output directory `modPhred/project`:
+## Program output
+ModPhred will generate in the output directory `modPhred/projectName`:
 - `.bed` - annotated positions with modifications as [bedMethyl-formatted](doc/#bedMethyl) files
   - mod.bed - combined report of positions with detected modifications in any of the samples
   - minimap2/*.bam.bed - modified sites reported for each run separetely
@@ -77,11 +135,6 @@ Modification probabilities can be viewed directly in [IGV](doc#visualisation).
 In addition, FastQ with encoded modifications as base qualities will be stored in as
 `guppy_out/project/sample*/workspace/*.fast5.fq.gz` files. 
 
-In order to see detailed description of program parameters, just execute it with `-h` / `--help`.
-Make sure your Fast5 files are basecalled with
-[guppy v3.1.5+ with models trained to detect modifications](/doc#how-to-check-if-my-fast5-files-are-basecalled-with-modifications).
-
-For more usage examples, please have a look in [test](test) directory. 
 
 ## Visualisation
 Instead of looking at text files described below, you can visualies some aspects of the DNA/RNA modifications. 
@@ -371,6 +424,37 @@ This may happen due to
   - variability in population - if you sequence pooled/mixed/tumor sample, some fraction of the cells may carry alternative alleles
 
 ## FAQ
+### Which pyguppyclient version should I install?
+Guppy API was changing across version and unfortunately the newer versions are not back-compatible.
+Therefore, you'll need to install pyguppyclient version matching the version of guppy basecaller. 
+
+| Guppy version | pyguppyclient version |
+| :-----------: | :-------------------: |
+| >= 4.4        | 0.0.9			|
+| >= 4.0 & <4.4	| 0.0.7a1		|
+| >= 3.4 & <4.0	| 0.0.6 		|
+| < 3.4	   	| not supported!  	|
+
+For example, if you intend to use guppy 4.0.15, you'll need to install pyguppyclient v0.0.7a1 as follows:
+```bash
+pip install pyguppyclient==0.0.7a1
+```
+
+Note, only one version of pyguppyclient can be installed in your system.
+If you wish to use more than one version, you can install them using virtual environments as follows:
+```bash
+python3 -m venv ~/src/venv/pyguppyclient006
+source ~/src/venv/pyguppyclient006/bin/activate
+pip install pyguppyclient==0.0.6 pysam pandas seaborn
+```
+
+And whenever you wish to switch to this version, just execute:
+```bash
+source ~/src/venv/pyguppyclient006/bin/activate
+```
+
+Once you are finish with computation eihert close the terminal window or execute `deactivate`. 
+
 ### Where does the name come from?
 Initially, this tool was called Pszczyna, but since almost no one could pronounce or memorise it,
 we came up with much easier, yet so much less sexy name...
