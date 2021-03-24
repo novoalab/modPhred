@@ -11,12 +11,12 @@ You can train models to detect novel DNA/RNA modifications using [taiyaki](https
 <img align="right" width="350" src="/doc/pipeline.png">
 
 The pipeline consists of four steps / modules ([more here](/doc#methods)):
-- Encoding modification probabilities in FastQ (mod_encode.py)
-- Alignments (get_align.py)
-- Detection of modifications (mod_report.py)
-- QC and plotting (mod_plot.py)
+- **1. modEncode**: Encoding modification probabilities in FastQ (mod_encode.py)
+- **2. modAlign**: Build alignments keepind modification information in BAMs (get_align.py)
+- **3. modReport** Extraction of RNA modification information (bedGraph) and QC reports (mod_report.py)
+- **4. modAnalysis**: Plotting venn diagrams (mod_plot.py), co-occurrence of modifications(mod_correlation.py) and per-read clustering based on modification profiles (mod_cluster.py)
 
-All those can be run separately or as a pipeline by executing `modPhred/run`.  
+All these scripts can be run separately or as a pipeline by executing `modPhred/run`.  
 
 ## Running the pipeline
 First, make sure you have [all dependencies installed in your system](/doc#installation). 
