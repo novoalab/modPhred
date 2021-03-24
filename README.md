@@ -69,4 +69,5 @@ If you have any questions, issues or doubts, first please have a look in the [do
 You'll find answers to most common questions and solutions to nearly all your problems.  
 If above is not true for you, please [open new issue](/issue). 
 
+## Citation 
 [How to cite this tool?](/doc#citation)
