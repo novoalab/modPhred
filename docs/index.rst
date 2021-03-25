@@ -30,7 +30,7 @@ Currently, there is only one modification-aware model distributed together with 
 You can `find more experimental models <https://github.com/nanoporetech/rerio>`_ 
 or you can train your own models using `taiyaki <https://github.com/nanoporetech/taiyaki>`_.
 
-`More information about running the pipeline <usage>`_.
+:doc:`More information about running the pipeline <usage>`.
 
 Why using modPhred?
 -------------------
@@ -55,6 +55,20 @@ This should address most common questions/problems.
 Then, have a look at `issues <https://github.com/novoalab/modPhred/issues?q=>`_
 users reported so far. If you don't find the solution, please open a new one.
 
+.. _citation:
+
+Where does the name come from?
+------------------------------
+Initially, this tool was called Pszczyna, but since almost no one could pronounce
+or memorise it, we came up with much easier, yet so much less sexy name...
+What the f..k is Pszczyna you may ask?
+If you wonder, why this name was chosen initially, stop.
+There are `numerous more interesting words that Pszczyna in Polish <https://www.youtube.com/watch?v=AfKZclMWS1U>`_.
+This one is just the name of a town where the author was born.
+Pszczyna, `pronounced ˈpʂt͡ʂɨna <https://forvo.com/word/pszczyna/>`_,
+is a beautiful town in the southern Poland.
+Strongly recommended for weekend visit!
+For more information, `check Wikipedia <https://en.wikipedia.org/wiki/Pszczyna>`_.
 
 Citation
 --------
@@ -72,7 +86,19 @@ Please, consider citing :doc:`dependencies <install>` as well.
    usage
    output
    test
+   plot
+   correlate
+   cluster
 
+.. toctree::
+   :maxdepth: 2
+   :hidden:
+   :caption: Methods
+	     
+   encode
+   align
+   report
+   
 Indices and tables
 ==================
 

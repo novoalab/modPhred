@@ -418,15 +418,16 @@ def main():
     #parser.add_argument("-b", "--minBA", default=0.0, type=float, help="min basecall accuracy [%(default)s]")
     #parser.add_argument("-m", "--minModMeanProb", default=0.05, type=float, help="min modification mean probability [%(default)s]")
     parser.add_argument("-t", "--threads", default=6, type=int, help="number of cores to use [%(default)s]")
-    parser.add_argument("--basecall_group",  default="", help="basecall group to use from Fast5 file [latest]")
     parser.add_argument("--MaxModsPerBase", default=MaxModsPerBase, type=int, help=argparse.SUPPRESS)
     parser.add_argument("--clean", action='store_true', help="clean up before running")
-    parser.add_argument("-c", "--config", default="dna_r9.4.1_450bps_modbases_dam-dcm-cpg_hac.cfg", help="guppy model [%(default)s]")
-    parser.add_argument("--host", "--guppy_basecall_server", default="localhost",
-                        help="guppy server hostname or path to guppy_basecall_server binary [%(default)s]")
-    parser.add_argument("-p", "--port", default=5555, type=int,
+    fast5 = parser.add_argument_group("Basecalled Fast5 options")
+    fast5.add_argument("--basecall_group",  default="", help="basecall group to use from Fast5 file [latest]")
+    guppy = parser.add_argument_group("Basecalling options") #mutually_exclusive
+    guppy.add_argument("-c", "--config", default="dna_r9.4.1_450bps_modbases_dam-dcm-cpg_hac.cfg", help="guppy model [%(default)s]")
+    guppy.add_argument("--host", "--guppy_basecall_server", default=None,
+                        help="guppy server hostname or path to guppy_basecall_server binary [assumes files are already basecalled with modifications]")
+    guppy.add_argument("-p", "--port", default=5555, type=int,
                         help="guppy server port (this is ignored if binary is provided) [%(default)s]")
-
     o = parser.parse_args()
     if o.verbose:
         sys.stderr.write("Options: %s\n"%str(o))
@@ -437,7 +438,13 @@ def main():
     if o.clean:
         clean(o.outdir, o.indirs, o.recursive)
     # encode modifications in FastQ
-    fast5_dirs = mod_encode(o.indirs, o.threads, o.config, o.host, o.port, o.MaxModsPerBase, o.recursive)
+    if o.host:
+        fast5_dirs = mod_encode(o.indirs, o.threads, o.config, o.host, o.port,
+                                o.MaxModsPerBase, o.recursive)
+    else:
+        import guppy_encode
+        fast5_dirs = guppy_encode.mod_encode(o.indirs, o.threads, o.basecall_group,
+                                             o.MaxModsPerBase, o.recursive)
     # align
     mod_align(o.indirs, o.fasta, o.outdir, o.threads, o.recursive)
     # process everything only if outfile does not exists

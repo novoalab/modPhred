@@ -60,8 +60,37 @@ Running modPhred pipeline is as easy as:
 
 For more usage examples, please have a look in :doc:`test dataset <test>`.
 
+How to check if my Fast5 files are basecalled with modifications?
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+modPhred will fail if you don't enable on-the-fly basecalling
+and try to run it on Fast5 files that are not basecalled
+or that are basecalled withouth modifications.
+You can check that quickly using ``h5ls``:
+* If you see ``*/Basecall_*`` entries, it means your Fast5 is basecalled.
+* If you see ``*/Basecall_*/BaseCalled_template/ModBaseProbs`` enries,
+  it means your Fast5 is basecalled with modificatoins.
+* If you don't see any of the above, your Fast5 files are not basecalled at all.
+
+Check test directory for information how to generate basecalled Fast5 files.
+
+.. code-block:: bash
+
+   > h5ls -r project/sample/workspace/batch_0.fast5 | less
+   /                        Group
+   /read_XXXXXX Group
+   /read_XXXXXX/Analyses Group
+   /read_XXXXXX/Analyses/Basecall_1D_000 Group
+   /read_XXXXXX/Analyses/Basecall_1D_000/BaseCalled_template Group
+   /read_XXXXXX/Analyses/Basecall_1D_000/BaseCalled_template/Fastq Dataset {SCALAR}
+   /read_XXXXXX/Analyses/Basecall_1D_000/BaseCalled_template/ModBaseProbs Dataset {10527, 6}
+   /read_XXXXXX/Analyses/Basecall_1D_000/BaseCalled_template/Move Dataset {54990}
+   /read_XXXXXX/Analyses/Basecall_1D_000/BaseCalled_template/Trace Dataset {54990, 8}
+   /read_XXXXXX/Analyses/Basecall_1D_000/Summary Group
+   ...
+
+
 Processing (very) large datasets
-^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+--------------------------------
 There are several ways of speeding up entire analysis for very large datasets.
 
 * modEncode: process each sample or (or even subsets of each run) separately using guppy_encove_live.py. Ideally, each subset will be processed on dedicated GPU (local or remote). Here, providing more than 6 cores per job brings no improvement, since modEncode is primarily GPU-bound.

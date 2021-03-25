@@ -94,4 +94,16 @@ For example, the mod.gz for ``NC_000913.3:1,061-1,253`` region will look like th
 
 
 
-
+Why base Y is detected as modified, while model only reports modifications for X?
+---------------------------------------------------------------------------------
+Let's assume your model detects 5mC. Sometimes non-C reference bases may be detected as modified.
+This may happend for several reasons:
+* mis-alignment - apparent 5mC bases were incorrectly aligned to A, G or T reference
+* mis-calling - apparent A, G or T bases were mispredicted as 5mC
+* true biological variation - for example:
+  * genotype of your sample may be different that this of your reference genome,
+    thus true base will be C instead of A, G or T
+  * heterozygous positions - a variant can have alternative allel being modified,
+    thus 5mC may be true
+  * variability in population - if you sequence pooled/mixed/tumor sample,
+    some fraction of the cells may carry alternative alleles
