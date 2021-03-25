@@ -478,8 +478,13 @@ def main():
     mod_bed(data, o.outdir, o.minModFreq)
     # plot pairwise plots - those will affect column names therefore has to be done at the end
     try:
-        if len(o.indirs)>1:
+        # skip pairplots if more than 4 samples
+        if len(o.indirs)>4:
+            logger("More than 4 samples: pairwise plots skipped. To generate them, execute:")
+            logger(" src/mod_plot.py --scatter -i %s"%outfn)
+        elif len(o.indirs)>1:
             mod_plot.plot_scatter(outfn, data=data)
+        # nothint to plot if single sample
     except Exception as e:
         logger("[ERROR] Plotting scatterplots failed (%s).\n"%str(e))
     # propose to clean up Fast5 dirs
