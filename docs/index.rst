@@ -17,7 +17,7 @@ The pipeline consists of four steps / modules:
    b. co-occurrence of modifications(mod_correlation.py)
    c. per-read clustering based on modification profiles (mod_cluster.py)
 
-All these scripts can be run separately or as a pipeline by executing modPhred/run.
+All these scripts can be run separately or as a pipeline by executing ``modPhred/run``.
 	 
 To run modPhred, you will need:
 
@@ -55,20 +55,19 @@ This should address most common questions/problems.
 Then, have a look at `issues <https://github.com/novoalab/modPhred/issues?q=>`_
 users reported so far. If you don't find the solution, please open a new one.
 
-.. _citation:
-
-Where does the name come from?
-------------------------------
-Initially, this tool was called Pszczyna, but since almost no one could pronounce
-or memorise it, we came up with much easier, yet so much less sexy name...
-What the f..k is Pszczyna you may ask?
-If you wonder, why this name was chosen initially, stop.
+What does modPhred stand for?
+-----------------------------
+The tool stores base modification status (probability of base having various types of modifications)
+encoded inside FastQ/BAM file instead of base quality (also called Phred scores),
+thus **mod** (for modification) & **Phred** (for base quality).. Or something like that :P  
+Initially, this tool was called **Pszczyna**,
+`pronounced ˈpʂt͡ʂɨna <https://forvo.com/word/pszczyna/>`_,
+but since almost no one could pronounce or memorise it, 
+we came up with much easier, yet so much less sexy name...
 There are `numerous more interesting words that Pszczyna in Polish <https://www.youtube.com/watch?v=AfKZclMWS1U>`_.
-This one is just the name of a town where the author was born.
-Pszczyna, `pronounced ˈpʂt͡ʂɨna <https://forvo.com/word/pszczyna/>`_,
-is a beautiful town in the southern Poland.
-Strongly recommended for weekend visit!
 For more information, `check Wikipedia <https://en.wikipedia.org/wiki/Pszczyna>`_.
+
+.. _citation:
 
 Citation
 --------
@@ -99,9 +98,3 @@ Please, consider citing :doc:`dependencies <install>` as well.
    align
    report
    
-Indices and tables
-==================
-
-* :ref:`genindex`
-* :ref:`modindex`
-* :ref:`search`

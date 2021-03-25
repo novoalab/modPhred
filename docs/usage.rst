@@ -32,7 +32,7 @@ Local on-the-fly basecalling
 ----------------------------
 Here, we assume, that you have guppy already installed in you system. ModPhred will start guppy_basecall_server in the background and stop it when it isn't needed anymore.
 
-All you need to do is to provide path to guppy_basecall_server (--host)
+All you need to do is to provide path to ``guppy_basecall_server`` using ``--host``
 
 .. code-block:: bash
 
@@ -42,7 +42,8 @@ Alternatively, if guppy_basecall_server is already running in your machine, you 
 
 Remote on-the-fly basecalling
 -----------------------------
-Here, we assume the guppy_basecall_server is already running in the remote machine. All you need to do is to provide IP address --host and port --port
+Here, we assume the guppy_basecall_server is already running in the remote machine.
+All you need to do is to provide IP address ``--host`` and port ``--port``
 
 .. code-block:: bash
 
@@ -50,7 +51,7 @@ Here, we assume the guppy_basecall_server is already running in the remote machi
 
 Without basecalling
 -------------------
-Make sure your Fast5 files are basecalled with guppy v3.1.5+ with models trained to detect modifications.
+Make sure your Fast5 files are basecalled with guppy v3.2+ with models trained to detect modifications.
 
 Running modPhred pipeline is as easy as:
 

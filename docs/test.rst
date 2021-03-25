@@ -3,8 +3,10 @@ Running test datasets
 
 Below you'll find detailed information on running modPhred pipeline on test dataset.
 You have two options:
+
 * download raw Fast5 files and perform basecalling
   (you'll need NVIDIA GPU with CUDA installed)
+  
 * download pre-basecalled Fast5 (no GPU needed)
 
 Perform basecalling (GPU needed)
@@ -61,7 +63,7 @@ Running entire modPhred pipeline (~4 minutes):
    acc=PRJEB22772; ver=3.6.1
    ~/src/modPhred/run -f ref/ECOLI.fa -o modPhred/$acc -i guppy$ver/$acc/*/workspace -t3
 
-Instead you can run all steps one-by-one as follows:
+Instead you can run all steps one-by-one as follow:
 
 .. code-block:: bash
 
@@ -70,11 +72,9 @@ Instead you can run all steps one-by-one as follows:
    ~/src/modPhred/src/mod_report.py -f ref/ECOLI.fa -o modPhred/$acc -i _archives/guppy$ver/$acc/*/workspace
    ~/src/modPhred/src/mod_plot.py -i modPhred/$acc/mod.gz
 
-Some examples of visualisation of the obtained results are described :doc:`here <plot>`.
-
 Compare modPhred and megalodon results
 --------------------------------------
-You can download modPhred or megalodon results using
+You can download precomputed modPhred and megalodon results using
 
 .. code-block:: bash
 
@@ -107,7 +107,7 @@ Above will produce Venn diagrams similar to these:
 	   
 For more detailed comparison have a look in :ref:`modPhred paper <citation>`. 
 
-For more examples of downstream analyses, check :doc:`<plot>`. 
+For more examples of downstream analyses, check :doc:`here <plot>`. 
 
 Test data generation
 --------------------
