@@ -1,7 +1,8 @@
 Detection of modifications
 ==========================
-In order to detect and annotated modified positions,modPhred scans read alignments
+In order to detect and annotated modified positions, modPhred scans read alignments
 and for every position of reference genome/transcriptome it calculates
+
 * depth of coverage,
 * basecall accuracy,
 * modification frequency
@@ -28,5 +29,3 @@ The default values can be adjusted with several parameters:
    --minModProb            min modification probability per base [0.5]
    ...
 
-How to parse alignments efficiently?
-------------------------------------

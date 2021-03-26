@@ -38,7 +38,10 @@ or `NVIDIA CUDA website for other systems <https://docs.nvidia.com/cuda/cuda-ins
 
    pip install pyguppyclient==0.0.7a1
 
-
+Once you have all dependencies installed,
+we recommend to try running it with :doc:`test dataset <test>`.
+It'll be much easier to troubleshoot all potential issues this way. 
+   
 Which pyguppyclient version should I install?
 ---------------------------------------------
 

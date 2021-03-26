@@ -11,11 +11,15 @@ modPhred will generate in the output directory ``modPhred/projectName``:
 * mod.gz - internal format with all predicted positions with likely modifications
 * minimap2/*.bam - alignments in BAM format and with encoded modifications.
   One BAM file will be generated for every sample (directory) provided as input ``-i``.
-  Modification probabilities can be :doc:`viewed directly in IGV <visualisation>`.
+  Modification probabilities can be :ref:`viewed directly in IGV <visualisation-in-genome-browsers-igv>`.
+  
 * .bed - annotated positions with modifications as bedMethyl-formatted files
+  
   * mod.bed - combined report of positions with detected modifications in any of the samples
   * minimap2/*.bam.bed - modified sites reported for each run separetely
+    
 * mod.gz.svg - QC plots
+  
   * and additional plots in plots/ directory
 
 In addition, FastQ with encoded modifications as base qualities will be stored in
@@ -98,12 +102,13 @@ Why base Y is detected as modified, while model only reports modifications for X
 ---------------------------------------------------------------------------------
 Let's assume your model detects 5mC. Sometimes non-C reference bases may be detected as modified.
 This may happend for several reasons:
+
 * mis-alignment - apparent 5mC bases were incorrectly aligned to A, G or T reference
 * mis-calling - apparent A, G or T bases were mispredicted as 5mC
 * true biological variation - for example:
   * genotype of your sample may be different that this of your reference genome,
-    thus true base will be C instead of A, G or T
+  thus true base will be C instead of A, G or T
   * heterozygous positions - a variant can have alternative allel being modified,
-    thus 5mC may be true
+  thus 5mC may be true
   * variability in population - if you sequence pooled/mixed/tumor sample,
-    some fraction of the cells may carry alternative alleles
+  some fraction of the cells may carry alternative alleles

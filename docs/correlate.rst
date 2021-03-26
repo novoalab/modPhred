@@ -1,5 +1,5 @@
-Correlation
-===========
+Correlation between positions
+=============================
 You can plot correlation between modified positions within certain regions.
 This is as easy as: 
 

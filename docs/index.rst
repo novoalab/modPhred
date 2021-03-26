@@ -4,7 +4,6 @@ modPhred: Documentation
 
 What is modPhred?
 -----------------
-
 modPhred is a pipeline for detection, annotation and visualisation of DNA/RNA modifications.
 The pipeline consists of four steps / modules:
 
@@ -18,7 +17,13 @@ The pipeline consists of four steps / modules:
    c. per-read clustering based on modification profiles (mod_cluster.py)
 
 All these scripts can be run separately or as a pipeline by executing ``modPhred/run``.
-	 
+
+.. image:: pipeline.png
+   :align: center
+   :width: 75%
+
+What do I need to run ModPhred?
+-------------------------------
 To run modPhred, you will need:
 
 0. :doc:`all dependencies installed <install>`
@@ -32,24 +37,24 @@ or you can train your own models using `taiyaki <https://github.com/nanoporetech
 
 :doc:`More information about running the pipeline <usage>`.
 
-Why using modPhred?
--------------------
 
+Why use modPhred?
+-----------------
 Cause why not! And seriously, it is:
 
-* free (MIT licensed) & fast (a few tims faster than other tools)
+* free (MIT licensed) & fast (a few times faster than other tools)
 * easy-to-use & versatile: will do all for you with just one command (or at least encoding of modifications in FastQ, alignments, detection of modified positions, QC & plotting...)
 * powerfull & space-optimised: it stores the modification status inside FastQ/BAM
   
   * no external files/DBs needed
   * you can visualise modification status of all bases of all reads in your favourite genome browser ie IGV
-  * you can remove all Fast5 files to save disk space
+  * you can remove all basecalled Fast5 files to save disk space
+    or skip separate basecalling step entirely thanks to on-the-fly basecalling!
 
 * visually attractive: it produces nice plots (or at least not so bad so far... still working on it;) )
 
 Getting help
 ------------
-
 If you have any questions, issues or doubts, first please get familiar with our documentation.
 This should address most common questions/problems. 
 Then, have a look at `issues <https://github.com/novoalab/modPhred/issues?q=>`_
@@ -60,6 +65,7 @@ What does modPhred stand for?
 The tool stores base modification status (probability of base having various types of modifications)
 encoded inside FastQ/BAM file instead of base quality (also called Phred scores),
 thus **mod** (for modification) & **Phred** (for base quality).. Or something like that :P  
+
 Initially, this tool was called **Pszczyna**,
 `pronounced ˈpʂt͡ʂɨna <https://forvo.com/word/pszczyna/>`_,
 but since almost no one could pronounce or memorise it, 
@@ -82,9 +88,9 @@ Please, consider citing :doc:`dependencies <install>` as well.
    :caption: First steps
 	     
    install
+   test
    usage
    output
-   test
    plot
    correlate
    cluster
