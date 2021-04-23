@@ -251,22 +251,22 @@ def mod_encode(indirs, threads, config, host, port, MaxModsPerBase=3,
             # this keeps info on completed Fast5>FastQ this way
             dump_info(indir, alphabet, symbol2modbase, canonical2mods, base2positions, fast5, fast5mod,
                       MaxModsPerBase, MaxPhredProb)
-    # report total number of bases for project
-    data = load_info(indir, recursive)
-    symbol2modbase = data["symbol2modbase"]
-    totbases = sum(v for k, v in data["fast5"].items())
-    # get total number of modifications
-    mods2count = {}
-    if "fast5mod" in data:
-        for fn in data["fast5mod"]:
-            for k, v in data["fast5mod"][fn].items():
-                if k not in mods2count: mods2count[k] = v
-                else: mods2count[k] += v
-    modcount = ", ".join(("{:,} {} [{:7,.3%}]".format(c, symbol2modbase[m], c/totbases)
-                          for m, c in mods2count.items()))
-    logger("  {:,} bases saved in FastQ, of those: {}   ".format(totbases, modcount), add_memory=0)
-    # close pool
-    p.close()
+        # report total number of bases for project
+        data = load_info(indir, recursive)
+        symbol2modbase = data["symbol2modbase"]
+        totbases = sum(v for k, v in data["fast5"].items())
+        # get total number of modifications
+        mods2count = {}
+        if "fast5mod" in data:
+            for fn in data["fast5mod"]:
+                for k, v in data["fast5mod"][fn].items():
+                    if k not in mods2count: mods2count[k] = v
+                    else: mods2count[k] += v
+        modcount = ", ".join(("{:,} {} [{:7,.3%}]".format(c, symbol2modbase[m], c/totbases)
+                              for m, c in mods2count.items()))
+        logger("  {:,} bases saved in FastQ, of those: {}   ".format(totbases, modcount), add_memory=0)
+        # close pool
+        p.close()
     # and guppy basecall server if it was started by this process
     if guppy_proc: guppy_proc.terminate()
     return fast5_dirs
