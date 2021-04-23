@@ -69,7 +69,8 @@ or that are basecalled withouth modifications.
 You can check that quickly using ``h5ls``:
 * If you see ``*/Basecall_*`` entries, it means your Fast5 is basecalled.
 * If you see ``*/Basecall_*/BaseCalled_template/ModBaseProbs`` enries,
-  it means your Fast5 is basecalled with modificatoins.
+it means your Fast5 is basecalled with modificatoins.
+
 * If you don't see any of the above, your Fast5 files are not basecalled at all.
 
 Check test directory for information how to generate basecalled Fast5 files.

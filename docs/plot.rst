@@ -56,6 +56,8 @@ From above plot it's very easy to conclude that enzymes depositing 5mC and 5mA i
 are likely acting on sequence motifs that are palindromic because modification
 on + strand is always followed by modification on - strand.
 
+.. _visualisation-in-genome-browsers-igv:
+	 
 Visualisation in genome browsers (IGV)
 --------------------------------------
 Modification probabilities for individual reads and bases can be viewed directly in

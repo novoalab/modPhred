@@ -1,5 +1,5 @@
-Running test datasets
-=====================
+Test datasets
+=============
 
 Below you'll find detailed information on running modPhred pipeline on test dataset.
 You have two options:
@@ -72,6 +72,12 @@ Instead you can run all steps one-by-one as follow:
    ~/src/modPhred/src/mod_report.py -f ref/ECOLI.fa -o modPhred/$acc -i _archives/guppy$ver/$acc/*/workspace
    ~/src/modPhred/src/mod_plot.py -i modPhred/$acc/mod.gz
 
+Some examples of visualisation of the obtained results are described :doc:`here <plot>`.
+
+Note, here we separately basecalled Fast5 files and then ran modPhred.
+However in real-live, we **strongly recommend performing on-the-fly basecalling**.
+You'll find more usage information :doc:`here <usage>`.
+   
 Compare modPhred and megalodon results
 --------------------------------------
 You can download precomputed modPhred and megalodon results using
