@@ -214,14 +214,16 @@ def get_latest_basecalling(h5, rname):
 
 def worker(args):
     """mod_encode worker using data stored by guppy3"""
-    fn, basecall_group, MaxPhredProb, remove = args
+    fn, ofn, basecall_group, MaxPhredProb = args
     basecount = warns = 0
     data, rname = [], ""
     alphabet, symbol2modbase, canonical2mods, base2positions, mods2count = '', {}, {}, {}, {}
     # open out file with gzip compression
-    outfn = fn+".fq.gz_"
+    outfn = ofn+".fastm.gz"
+    outfq = ofn+".fastq.gz_"
     # The default mode is "rb", and the default compresslevel is 9.
     out = gzip.open(outfn, "wt")
+    out2 = gzip.open(outfq, "wt")
     # process entries in fast5
     h5 = h5py.File(fn, 'r')
     for i, rname in enumerate(h5):
@@ -254,9 +256,12 @@ def worker(args):
         fastq_elements = fastq[()].tobytes().decode().split('\n')
         read_name = fastq_elements[0].split()[0][1:]
         seq = fastq_elements[1]
+        qual = fastq_elements[3]
         basecount += len(seq)
         # get modprobs as qualities
         phredmodprobs, mod2count = get_phredmodprobs(seq, modbaseprobNorm, mods2count, base2positions, canonical2mods, MaxPhredProb)
+        # store FastQ and FastM
+        out2.write("@%s\n%s\n+\n%s\n"%(read_name, seq, qual))
         out.write("@%s\n%s\n+\n%s\n"%(read_name, seq, phredmodprobs))
     # report number of bases
     if rname:
@@ -264,19 +269,26 @@ def worker(args):
     # if warnings skip file entirely
     if warns:
         return fn, 0, mods2count, alphabet, symbol2modbase, canonical2mods, base2positions
-    # and remove Fast5 only if not warnings
-    elif remove:
-        os.unlink(fn)
     # mv only if finished
-    os.replace(fn+".fq.gz_", fn+".fq.gz")
+    os.replace(ofn+".fastq.gz_", ofn+".fastq.gz")
     return fn, basecount, mods2count, alphabet, symbol2modbase, canonical2mods, base2positions
 
-def mod_encode(indirs, threads=1, basecall_group="Basecall_1D_000", MaxModsPerBase=3,
-               recursive=False, remove=False):
+def get_output_fnames(fnames, indir, outdir):
+    """Return FastQ directory name and output names for FastQ files"""
+    ofnames = []
+    fqdir = os.path.join(outdir, "reads", os.path.basename(indir))
+    for fn in fnames:
+        ofn = os.path.join(fqdir, fn[len(indir):].lstrip(os.path.sep))
+        ofnames.append(ofn)
+        # create out directories for FastQ files
+        if not os.path.isdir(os.path.dirname(ofn)): os.makedirs(os.path.dirname(ofn))
+    return fqdir, ofnames
+
+def mod_encode(outdir, indirs, threads, basecall_group="", MaxModsPerBase=3, recursive=False):
     """Convert basecalled Fast5 into FastQ with base modification probabilities
     encoded as FastQ qualities.
     """
-    fast5_dirs = set()
+    fastq_dirs = []
     MaxPhredProb = get_MaxPhredProb(MaxModsPerBase)
     logger("Encoding modification info from %s directories...\n"%len(indirs))
     for indir in indirs:
@@ -284,10 +296,6 @@ def mod_encode(indirs, threads=1, basecall_group="Basecall_1D_000", MaxModsPerBa
             fnames = sorted(map(str, Path(indir).rglob('*.fast5')))
         else:
             fnames = sorted(map(str, Path(indir).glob('*.fast5')))
-        # process & remove Fast5 files modified more than --remove minutes ago
-        if remove:
-            now = time.time()
-            fnames = list(filter(lambda f: now-os.path.getmtime(f)>=remove*60, fnames))
         logger(" %s with %s Fast5 file(s)...\n"%(indir, len(fnames)))
         # no need to have more threads than input directories ;) 
         if threads > len(fnames):
@@ -316,14 +324,16 @@ def mod_encode(indirs, threads=1, basecall_group="Basecall_1D_000", MaxModsPerBa
                 fast5 = data["fast5"]
                 logger("  %s were processed earlier."%len(fast5), add_memory=0)
         # process files if not already processed (FastQ not present or FastQ is older than Fast5)
-        args = [(fn, basecall_group, MaxPhredProb, remove) for fn in fnames
-                if not os.path.isfile(fn+".fq.gz") or os.path.getmtime(fn)>os.path.getmtime(fn+".fq.gz")]
+        fqdir, ofnames = get_output_fnames(fnames, indir, outdir)
+        fastq_dirs.append(fqdir)
+        args = [(fn, ofn, basecall_group, MaxPhredProb) for fn, ofn in zip(fnames, ofnames)
+                if not os.path.isfile(ofn+".fastq.gz")]
         parser = imap(worker, args)
         for ii, (fn, basecount, mods2count, alphabet, symbol2modbase, canonical2mods, base2positions) in enumerate(parser, 1):
             # skip files without bases
             if not basecount: continue
             sys.stderr.write(" %s / %s  %s with %s bases. Detected mods: %s   \r"%(ii, len(args), os.path.basename(fn), basecount, str(mods2count)))
-            data = load_info(indir, recursive)
+            data = load_info(fqdir, recursive)
             # store data
             if data:
                 # either add new Fast5
@@ -345,10 +355,10 @@ def mod_encode(indirs, threads=1, basecall_group="Basecall_1D_000", MaxModsPerBa
                     info = "[mod_encode][WARNING] Too many modifications per base (%s). \nPlease restart with --MaxModsPerBase %s or larger!"
                     warning(info%(maxnmodsperbase, maxnmodsperbase))
             # this keeps info on completed Fast5>FastQ this way
-            dump_info(indir, alphabet, symbol2modbase, canonical2mods, base2positions, fast5, fast5mod,
+            dump_info(fqdir, alphabet, symbol2modbase, canonical2mods, base2positions, fast5, fast5mod,
                       MaxModsPerBase, MaxPhredProb)
         # report total number of bases for project
-        data = load_info(indir, recursive)
+        data = load_info(fqdir, recursive)
         symbol2modbase = data["symbol2modbase"]
         totbases = sum(v for k, v in data["fast5"].items())
         # get total number of modifications
@@ -363,7 +373,7 @@ def mod_encode(indirs, threads=1, basecall_group="Basecall_1D_000", MaxModsPerBa
         logger("  {:,} bases saved in FastQ, of those: {}   ".format(totbases, modcount), add_memory=0)
         # close pool
         if threads>1: p.terminate()
-    return fast5_dirs
+    return fastq_dirs
 
 def warning(info):
     def count(i=0):
@@ -396,18 +406,18 @@ def main():
     parser.add_argument('--version', action='version', version=VERSION)   
     parser.add_argument("-v", "--verbose", action="store_true", help="verbose")    
     parser.add_argument("-i", "--indirs", nargs="+", help="input directory with Fast5 files")
+    parser.add_argument("-o", "--outdir", default="modPhred", help="output directory [%(default)s]")
     parser.add_argument("-r", "--recursive", action='store_true', help="recursive processing of input directories [%(default)s]")
     parser.add_argument("-t", "--threads", default=8, type=int, help="number of cores to use [%(default)s]")
     parser.add_argument("--basecall_group",  default="", help="basecall group to use from Fast5 file [last basecalling]")
     parser.add_argument("--MaxModsPerBase", default=MaxModsPerBase, type=int, help=argparse.SUPPRESS)
-    parser.add_argument("--remove", default=0, type=int, help="remove processed Fast5 files older than --remove minutes")
 
     o = parser.parse_args()
     if o.verbose: 
         sys.stderr.write("Options: %s\n"%str(o))
 
     #sys.stderr.write("Processing %s directories...\n"%len(o.indirs))
-    mod_encode(o.indirs, o.threads, o.basecall_group, o.MaxModsPerBase, o.recursive, o.remove)
+    mod_encode(o.outdir, o.indirs, o.threads, o.basecall_group, o.MaxModsPerBase, o.recursive)
 
 if __name__=='__main__': 
     t0 = datetime.now()

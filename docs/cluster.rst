@@ -10,7 +10,7 @@ Definitely, avoid clustering reads from entire chromosomes.
    ~/src/modPhred/src/mod_cluster.py --minfreq 0.01 -i mod.gz -e pdf
 
 
-This will produce plots to this one
+This will produce plots similar to this one
 
 .. image:: cluster.png
    :align: center

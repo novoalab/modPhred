@@ -37,7 +37,9 @@ def _get_read_data_v006(client):
     """Store read id, sequence and base_mod_probs. Compatible with v0.0.6"""
     reads = []
     for read, called in get_completed_reads(client):
-        reads.append((read.read_id, called.seq, called.mod_probs*255, 
+        # reduce mod_probs size 8x
+        mod_probs = np.array(called.mod_probs*255, dtype="uint8")
+        reads.append((read.read_id, called.seq, called.qual, mod_probs, 
                       " ".join(called.mod_long_names), called.mod_alphabet))
     return reads
 
@@ -47,7 +49,7 @@ def _get_read_data_v007a1(client):
     reads = [] # v0.0.7a1 returns reads, error_msg
     for read in client.pcl_client.get_completed_reads()[0]:
         md, ds = read["metadata"], read["datasets"]
-        reads.append((md["read_id"], ds["sequence"], ds["base_mod_probs"],
+        reads.append((md["read_id"], ds["sequence"], ds["qstring"], ds["base_mod_probs"],
                       md["base_mod_long_names"], md["base_mod_alphabet"]))
     return reads
             
@@ -57,7 +59,7 @@ def _get_read_data_v009(client):
     reads = [] # v0.0.9 returns reads
     for read in client.pcl_client.get_completed_reads():
         md, ds = read["metadata"], read["datasets"]
-        reads.append((md["read_id"], ds["sequence"], ds["base_mod_probs"],
+        reads.append((md["read_id"], ds["sequence"], ds["qstring"], ds["base_mod_probs"],
                       md["base_mod_long_names"], md["base_mod_alphabet"]))
     return reads
             
@@ -85,7 +87,7 @@ def basecalling_worker(args):
     Basecalling is running as a separate worker process, so GPU is fully loaded. 
     Here read objects are small (10-100 Mb per Fast5), thus easy to pickle. 
     """
-    fn, config, host, port = args
+    fn, ofn, config, host, port = args
     # define parameters for pyguppyclient v0.0.6 or newer
     ver = pyguppyclient.__version__
     kwargs = {} # no trace=True for v0.0.6, v0.0.7a1
@@ -106,18 +108,20 @@ def basecalling_worker(args):
     client.connect()
     reads = get_basecalled_reads_data(fn, client, _get_read_data)
     client.disconnect() # this is a bit dirty, but works fine
-    return fn, reads
+    return fn, ofn, reads
 
-def get_encoded_FastQ(reads, fn, MaxPhredProb):
+def get_encoded_FastQ(reads, fn, ofn, MaxPhredProb):
     """Store modificoation probability in FastQ"""
     basecount = warns = 0
     data, rname = [], ""
     alphabet, symbol2modbase, canonical2mods, base2positions, mods2count = '', {}, {}, {}, {}
     # open out file with gzip compression
-    outfn = fn+".fq.gz_"
+    outfn = ofn+".fastm.gz"
+    outfq = ofn+".fastq.gz_"
     # The default mode is "rb", and the default compresslevel is 9.
     out = gzip.open(outfn, "wt")
-    for ri, (read_name, seq, mod_probs, mods, output_alphabet) in enumerate(reads, 1):
+    out2 = gzip.open(outfq, "wt")
+    for ri, (read_name, seq, qual, mod_probs, mods, output_alphabet) in enumerate(reads, 1):
         # prepare data storage if not already prepared
         if ri==1:
             alphabet, symbol2modbase, canonical2mods, base2positions = get_alphabet(output_alphabet, mods)
@@ -131,10 +135,11 @@ def get_encoded_FastQ(reads, fn, MaxPhredProb):
         # get modprobs as qualities
         phredmodprobs, mod2count = get_phredmodprobs(seq, modbaseprobNorm, mods2count, base2positions, canonical2mods, MaxPhredProb)
         out.write("@%s\n%s\n+\n%s\n"%(read_name, seq, phredmodprobs))
+        out2.write("@%s\n%s\n+\n%s\n"%(read_name, seq, qual))
     # report number of bases
     if rname: name = "/".join(fn.split("/")[-4:])
     # mv only if finished
-    os.replace(fn+".fq.gz_", fn+".fq.gz")
+    os.replace(ofn+".fastq.gz_", ofn+".fastq.gz")
     return basecount, mods2count, alphabet, symbol2modbase, canonical2mods, base2positions
 
 def start_guppy_server(host, config, port, device):
@@ -178,14 +183,14 @@ def start_guppy_server(host, config, port, device):
         host = "localhost"
     return proc, host, port
 
-def mod_encode(indirs, threads, config, host, port, MaxModsPerBase=3,
-               recursive=False, remove=False, device="cuda:0"):
+def mod_encode(outdir, indirs, threads, config, host, port, MaxModsPerBase=3,
+               recursive=False, device="cuda:0"):
     """Convert basecalled Fast5 into FastQ with base modification probabilities
     encoded as FastQ qualities.
     """
     # start guppy server if needed
     guppy_proc, host, port = start_guppy_server(host, config, port, device)
-    fast5_dirs = set()
+    fastq_dirs = []
     MaxPhredProb = get_MaxPhredProb(MaxModsPerBase)
     logger("Encoding modification info from %s directories...\n"%len(indirs))
     for indir in indirs:
@@ -193,10 +198,6 @@ def mod_encode(indirs, threads, config, host, port, MaxModsPerBase=3,
             fnames = sorted(map(str, Path(indir).rglob('*.fast5')))
         else:
             fnames = sorted(map(str, Path(indir).glob('*.fast5')))
-        # process & remove Fast5 files modified more than --remove minutes ago
-        if remove:
-            now = time.time()
-            fnames = list(filter(lambda f: now-os.path.getmtime(f)>=remove*60, fnames))
         logger(" %s with %s Fast5 file(s)...\n"%(indir, len(fnames)))
         # load current data - this may cause problems if recursion was done...
         data = load_info(indir, recursive)
@@ -217,17 +218,18 @@ def mod_encode(indirs, threads, config, host, port, MaxModsPerBase=3,
                 logger("  %s were processed earlier."%len(fast5), add_memory=0)
         # process files if not already processed (FastQ not present or FastQ is older than Fast5)
         p = Pool(1) #, maxtasksperchild=1000)
-        args = [(fn, config, host, port) for fn in fnames
-                if not os.path.isfile(fn+".fq.gz")
-                or os.path.getmtime(fn)>os.path.getmtime(fn+".fq.gz")]
-        for ii, (fn, reads) in enumerate(p.imap(basecalling_worker, args), 1):
+        fqdir, ofnames = get_output_fnames(fnames, indir, outdir)
+        fastq_dirs.append(fqdir)
+        args = [(fn, ofn, config, host, port) for fn, ofn in zip(fnames, ofnames)
+                if not os.path.isfile(ofn+".fastq.gz")]
+        for ii, (fn, ofn, reads) in enumerate(p.imap(basecalling_worker, args), 1):
             # store modification probability in FastQ
             (basecount, mods2count, alphabet, symbol2modbase, canonical2mods,
-             base2positions) = get_encoded_FastQ(reads, fn, MaxPhredProb)                
+             base2positions) = get_encoded_FastQ(reads, fn, ofn, MaxPhredProb)                
             # skip files without bases
             if not basecount: continue
             sys.stderr.write(" %s / %s  %s with %s bases. Detected mods: %s   \r"%(ii, len(fnames), os.path.basename(fn), basecount, str(mods2count)))
-            data = load_info(indir, recursive)
+            data = load_info(fqdir, recursive)
             # store data
             if data:
                 # either add new Fast5
@@ -249,27 +251,27 @@ def mod_encode(indirs, threads, config, host, port, MaxModsPerBase=3,
                     info = "[mod_encode][WARNING] Too many modifications per base (%s). \nPlease restart with --MaxModsPerBase %s or larger!"
                     warning(info%(maxnmodsperbase, maxnmodsperbase))
             # this keeps info on completed Fast5>FastQ this way
-            dump_info(indir, alphabet, symbol2modbase, canonical2mods, base2positions, fast5, fast5mod,
+            dump_info(fqdir, alphabet, symbol2modbase, canonical2mods, base2positions, fast5, fast5mod,
                       MaxModsPerBase, MaxPhredProb)
-    # report total number of bases for project
-    data = load_info(indir, recursive)
-    symbol2modbase = data["symbol2modbase"]
-    totbases = sum(v for k, v in data["fast5"].items())
-    # get total number of modifications
-    mods2count = {}
-    if "fast5mod" in data:
-        for fn in data["fast5mod"]:
-            for k, v in data["fast5mod"][fn].items():
-                if k not in mods2count: mods2count[k] = v
-                else: mods2count[k] += v
-    modcount = ", ".join(("{:,} {} [{:7,.3%}]".format(c, symbol2modbase[m], c/totbases)
-                          for m, c in mods2count.items()))
-    logger("  {:,} bases saved in FastQ, of those: {}   ".format(totbases, modcount), add_memory=0)
+        # report total number of bases for project
+        data = load_info(fqdir, recursive)
+        symbol2modbase = data["symbol2modbase"]
+        totbases = sum(v for k, v in data["fast5"].items())
+        # get total number of modifications
+        mods2count = {}
+        if "fast5mod" in data:
+            for fn in data["fast5mod"]:
+                for k, v in data["fast5mod"][fn].items():
+                    if k not in mods2count: mods2count[k] = v
+                    else: mods2count[k] += v
+        modcount = ", ".join(("{:,} {} [{:7,.3%}]".format(c, symbol2modbase[m], c/totbases)
+                              for m, c in mods2count.items()))
+        logger("  {:,} bases saved in FastQ, of those: {}   ".format(totbases, modcount), add_memory=0)
     # close pool
     p.close()
     # and guppy basecall server if it was started by this process
     if guppy_proc: guppy_proc.terminate()
-    return fast5_dirs
+    return fastq_dirs
 
 def warning(info):
     def count(i=0):
@@ -302,11 +304,11 @@ def main():
     parser.add_argument('--version', action='version', version=VERSION)   
     parser.add_argument("-v", "--verbose", action="store_true", help="verbose")    
     parser.add_argument("-i", "--indirs", nargs="+", help="input directory with Fast5 files")
+    parser.add_argument("-o", "--outdir", default="modPhred", help="output directory [%(default)s]")
     parser.add_argument("-r", "--recursive", action='store_true', help="recursive processing of input directories [%(default)s]")
     parser.add_argument("-t", "--threads", default=6, type=int, help="number of cores to use [%(default)s]")
     #parser.add_argument("--basecall_group",  default="", help="basecall group to use from Fast5 file [last basecalling]")
     parser.add_argument("--MaxModsPerBase", default=MaxModsPerBase, type=int, help=argparse.SUPPRESS)
-    #parser.add_argument("--remove", default=0, type=int, help="remove processed Fast5 files older than --remove minutes")
     parser.add_argument("-c", "--config", default="dna_r9.4.1_450bps_modbases_dam-dcm-cpg_hac.cfg", help="guppy model [%(default)s]")
     parser.add_argument("--host", "--guppy_basecall_server", default="localhost",
                         help="guppy server hostname or path to guppy_basecall_server binary [%(default)s]")
@@ -318,7 +320,8 @@ def main():
         sys.stderr.write("Options: %s\n"%str(o))
 
     #sys.stderr.write("Processing %s directories...\n"%len(o.indirs))
-    mod_encode(o.indirs, o.threads, o.config, o.host, o.port, o.MaxModsPerBase, o.recursive)
+    mod_encode(o.outdir, o.indirs, o.threads, o.config, o.host, o.port, o.MaxModsPerBase,
+               o.recursive)
 
 if __name__=='__main__': 
     t0 = datetime.now()

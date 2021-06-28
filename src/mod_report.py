@@ -377,27 +377,6 @@ def mod_bed(data, outdir, minModFreq=0.1):
                           r.pos-1, r.pos, get_rgb(mod2color[r["mod"]], freq), depth, round(100*freq)))
     out.close()
     
-def clean(outdir, indirs, recursive=False):
-    """Remove previous results"""
-    import shutil
-    logger("Cleaning up %s & %s input dirs..."%(outdir, len(indirs)))
-    # remove results dir
-    if os.path.isdir(outdir):
-        logger(" rm -r %s"%outdir, add_memory=0)
-        shutil.rmtree(outdir, ignore_errors=True)
-    for indir in indirs:
-        # remove *.fq.gz and modPhred.pkl from in dir
-        pkl = os.path.join(indir, "modPhred.pkl")
-        logger(" rm %s %s/*.fq.gz"%(pkl, indir), add_memory=0)
-        if os.path.isfile(pkl):
-            os.unlink(pkl)
-        if recursive:
-            fnames = sorted(map(str, Path(indir).rglob('*.fq.gz')))
-        else:
-            fnames = sorted(map(str, Path(indir).glob('*.fq.gz')))            
-        for fp in fnames:
-            os.unlink(fp)
-    
 def main():
     import argparse
     usage   = "%(prog)s -v" #usage=usage, 
@@ -419,7 +398,6 @@ def main():
     #parser.add_argument("-m", "--minModMeanProb", default=0.05, type=float, help="min modification mean probability [%(default)s]")
     parser.add_argument("-t", "--threads", default=6, type=int, help="number of cores to use [%(default)s]")
     parser.add_argument("--MaxModsPerBase", default=MaxModsPerBase, type=int, help=argparse.SUPPRESS)
-    parser.add_argument("--clean", action='store_true', help="clean up before running")
     fast5 = parser.add_argument_group("Basecalled Fast5 options")
     fast5.add_argument("--basecall_group",  default="", help="basecall group to use from Fast5 file [latest]")
     guppy = parser.add_argument_group("Basecalling options") #mutually_exclusive
@@ -434,19 +412,16 @@ def main():
 
     logger("===== Welcome, welcome to modPhred pipeline! =====", add_memory=0)
         
-    # clean up if asked for - add prompt for safety!
-    if o.clean:
-        clean(o.outdir, o.indirs, o.recursive)
     # encode modifications in FastQ
     if o.host:
-        fast5_dirs = mod_encode(o.indirs, o.threads, o.config, o.host, o.port,
+        fastq_dirs = mod_encode(o.outdir, o.indirs, o.threads, o.config, o.host, o.port,
                                 o.MaxModsPerBase, o.recursive)
     else:
         import guppy_encode
-        fast5_dirs = guppy_encode.mod_encode(o.indirs, o.threads, o.basecall_group,
+        fastq_dirs = guppy_encode.mod_encode(o.outdir, o.indirs, o.threads, o.basecall_group,
                                              o.MaxModsPerBase, o.recursive)
     # align
-    mod_align(o.indirs, o.fasta, o.outdir, o.threads, o.recursive)
+    mod_align(fastq_dirs, o.fasta, o.outdir, o.threads, o.recursive)
     # process everything only if outfile does not exists
     outfn = os.path.join(o.outdir, "mod.gz")
     if not os.path.isfile(outfn):
@@ -494,10 +469,6 @@ def main():
         # nothint to plot if single sample
     except Exception as e:
         logger("[ERROR] Plotting scatterplots failed (%s).\n"%str(e))
-    # propose to clean up Fast5 dirs
-    if fast5_dirs:
-        logger("You can consider removing Fast5 files to save lots of space:\n", add_memory=0)
-        logger(" rm %s/*.fast5"%"/*.fast5 ".join(fast5_dirs), add_memory=0)
     logger("All finished! Have a nice day :)")
 
 if __name__=='__main__': 

@@ -47,15 +47,15 @@ def mod_align(indirs, ref, outdir, threads, recursive=False, bamdir="minimap2"):
     # process indirs
     for indir in indirs:
         # run alignment if BAM doesn't exist already
-        outfn = os.path.join(outdir, bamdir, indir.split("/")[-2]+".bam")
+        outfn = os.path.join(outdir, bamdir, os.path.basename(indir)+".bam")
         if os.path.isfile(outfn):
             logger(" %s already present"%outfn)
             continue
         logger("  > %s\n"%outfn)
         if recursive:
-            fq = sorted(map(str, Path(indir).rglob('*.fq.gz')))
+            fq = sorted(map(str, Path(indir).rglob('*.fastm.gz')))
         else:
-            fq = sorted(map(str, Path(indir).glob('*.fq.gz')))
+            fq = sorted(map(str, Path(indir).glob('*.fastm.gz')))
         run_minimap2(ref, fq, outfn, threads, spliced=is_rna(indir))
         # update dump info
         dump_updated_info(indir, outdir, outfn)
@@ -111,7 +111,7 @@ def main():
   
     parser.add_argument('--version', action='version', version=VERSION)   
     parser.add_argument("-v", "--verbose", action="store_true", help="verbose")    
-    parser.add_argument("-i", "--indirs", nargs="+", help="input directories with Fast5 files")
+    parser.add_argument("-i", "--indirs", nargs="+", help="input directories with FastQ files")
     parser.add_argument("-t", "--threads", default=8, type=int, help="number of cores to use [%(default)s]")
     parser.add_argument("-f", "--fasta", required=1, help="reference FASTA file")
     parser.add_argument("-o", "--outdir", default="modPhred", help="output directory [%(default)s]")

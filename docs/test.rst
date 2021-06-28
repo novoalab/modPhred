@@ -4,13 +4,14 @@ Test datasets
 Below you'll find detailed information on running modPhred pipeline on test dataset.
 You have two options:
 
-* download raw Fast5 files and perform basecalling
+* download raw Fast5 files and run modPhred with live basecalling
   (you'll need NVIDIA GPU with CUDA installed)
   
-* download pre-basecalled Fast5 (no GPU needed)
+* download pre-basecalled Fast5 and run modPhred with pre-basecalled Fast5 files
+  (no GPU needed)
 
-Perform basecalling (GPU needed)
---------------------------------
+ModPhred pipeline with live basecalling
+---------------------------------------
 
 Download test data
 ^^^^^^^^^^^^^^^^^^
@@ -23,53 +24,59 @@ Get raw Fast5 data from `PRJEB22772 <https://www.ebi.ac.uk/ena/data/view/PRJEB22
    cd test
    wget https://public-docs.crg.es/enovoa/public/lpryszcz/src/modPhred/test/ -q --show-progress -r -c -nc -np -nH --cut-dirs=6 --reject="index.html*"
 
-Run basecalling
-^^^^^^^^^^^^^^^
-Below, will basecall all runs from PRJEB22772.
-This will take 3-6 minutes on modern GPU or ~13 hours on CPU.
+Run modPhred
+^^^^^^^^^^^^
+Running entire modPhred pipeline with live basecalling (~6 minutes):
 
 .. code-block:: bash
 
-   acc=PRJEB22772; ver=3.6.1
-   for f in $acc/*; do
-    d=`echo $f | rev | cut -f1 -d'/' | rev`;
-    if [ ! -d guppy$ver/$acc/$d ]; then
-     echo `date` $f $d;
-     ~/src/ont-guppy_$ver/bin/guppy_basecaller --device cuda:0 -c dna_r9.4.1_450bps_modbases_dam-dcm-cpg_hac.cfg --compress_fastq --fast5_out --disable_pings -ri $f -s guppy$ver/$acc/$d;
-    fi;
-   done; date
+   acc=PRJEB22772
+   ~/src/modPhred/run -f ref/ECOLI.fa -o modPhred/$acc -i $acc/* -t3 --host 10.46.1.65 -p 5556
 
-Above will work only if you have NVIDIA GPU and CUDA installed.
-Alternatively, you can use CPU basecalling by skipping ``--device cuda:0`` parameter.
-Note basecalling on CPU will be muuuuch slower (~100-300 times) than GPU,
-depending on your CPU/GPU model!
-For some stats, have a look in
-`Table 1 in Master of Pores paper <https://www.biorxiv.org/content/10.1101/818336v1>`_.
+Instead you can run all steps one-by-one as follow:
 
-Skip basecalling (no GPU needed)
---------------------------------
+.. code-block:: bash
+
+   ~/src/modPhred/src/guppy_encode_live.py -i $acc/* -o modPhred/$acc --host 10.46.1.65 -p 5556
+   ~/src/modPhred/src/guppy_align.py -f ref/ECOLI.fa -o modPhred/$acc -i modPhred/$acc/reads/*
+   ~/src/modPhred/src/mod_report.py -f ref/ECOLI.fa -o modPhred/$acc -i $acc/*
+   ~/src/modPhred/src/mod_plot.py -i modPhred/$acc/mod.gz
+
+Some examples of visualisation of the obtained results are described :doc:`here <plot>`.
+
+Note, here we separately basecalled Fast5 files and then ran modPhred.
+However in real-live, we **strongly recommend performing on-the-fly basecalling**.
+You'll find more usage information :doc:`here <usage>`.
+
+ModPhred pipeline with basecalled Fast5 files
+---------------------------------------------
+
+Download pre-basecalled test data
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 If you can't run basecalling, you can download basecalled Fast5 files using:
 
 .. code-block:: bash
 
    wget https://public-docs.crg.es/enovoa/public/lpryszcz/src/modPhred/basecalled/ -q --show-progress -r -c -nc -np -nH --cut-dirs=6 --reject="index.html*"
 
+   
+
 Run modPhred
-------------
-Running entire modPhred pipeline (~4 minutes):
+^^^^^^^^^^^^
+Running entire modPhred pipeline from basecalled Fast5 files (~4 minutes):
 
 .. code-block:: bash
 
-   acc=PRJEB22772; ver=3.6.1
-   ~/src/modPhred/run -f ref/ECOLI.fa -o modPhred/$acc -i guppy$ver/$acc/*/workspace -t3
+   acc=PRJEB22772; ver=3.4.1
+   ~/src/modPhred/run -f ref/ECOLI.fa -o modPhred/$acc -ri guppy$ver/$acc/* -t3
 
 Instead you can run all steps one-by-one as follow:
 
 .. code-block:: bash
 
-   ~/src/modPhred/src/guppy_encode.py -i _archives/guppy$ver/$acc/*/workspace
-   ~/src/modPhred/src/guppy_align.py -f ref/ECOLI.fa -o modPhred/$acc -i _archives/guppy$ver/$acc/*/workspace
-   ~/src/modPhred/src/mod_report.py -f ref/ECOLI.fa -o modPhred/$acc -i _archives/guppy$ver/$acc/*/workspace
+   ~/src/modPhred/src/guppy_encode.py -o modPhred/$acc -ri guppy$ver/$acc/*
+   ~/src/modPhred/src/guppy_align.py -f ref/ECOLI.fa -o modPhred/$acc -ri modPhred/$acc/reads/*
+   ~/src/modPhred/src/mod_report.py -f ref/ECOLI.fa -o modPhred/$acc -ri guppy$ver/$acc/*
    ~/src/modPhred/src/mod_plot.py -i modPhred/$acc/mod.gz
 
 Some examples of visualisation of the obtained results are described :doc:`here <plot>`.
