@@ -267,8 +267,8 @@ def mod_encode(outdir, indirs, threads, config, host, port, MaxModsPerBase=3,
         modcount = ", ".join(("{:,} {} [{:7,.3%}]".format(c, symbol2modbase[m], c/totbases)
                               for m, c in mods2count.items()))
         logger("  {:,} bases saved in FastQ, of those: {}   ".format(totbases, modcount), add_memory=0)
-    # close pool
-    p.close()
+        # close pool
+        p.close()
     # and guppy basecall server if it was started by this process
     if guppy_proc: guppy_proc.terminate()
     return fastq_dirs
