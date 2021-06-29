@@ -1,6 +1,9 @@
 Installation
 ============
 
+Manual installation
+-------------------
+
 modPhred is written in Python3 and should work in most UNIX systems.
 
 Make sure you install all programs listed below, before runnning the pipeline.
@@ -43,7 +46,7 @@ we recommend to try running it with :doc:`test dataset <test>`.
 It'll be much easier to troubleshoot all potential issues this way. 
    
 Which pyguppyclient version should I install?
----------------------------------------------
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
 Guppy API was changing across version and unfortunately the newer versions are not back-compatible.
 Therefore, you'll need to install pyguppyclient version matching the version of guppy basecaller.
@@ -81,3 +84,19 @@ And whenever you wish to switch to this version, just execute:
 
 Once you are finish with computation eihert close the terminal window
 or execute ``deactivate``.
+
+
+Docker image
+------------
+We maintain docker image for below versions of guppy:
+- 3.6.1
+
+In order to execute :doc:`test example <test>`, all you need to do
+is to adjust the version of guppy in the below command:
+
+.. code-block:: bash
+
+   acc=PRJEB22772		
+   cd test
+   docker run -it -v `pwd`:"/data" lpryszcz/modPhred-3.6.1 /opt/modPhred/run -f /data/ref/ECOLI.fa -o /data/modPhred/$acc -i /data/$acc/* -t4 --host /usr/bin/guppy_basecall_server
+

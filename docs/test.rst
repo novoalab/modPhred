@@ -5,7 +5,7 @@ Below you'll find detailed information on running modPhred pipeline on test data
 You have two options:
 
 * download raw Fast5 files and run modPhred with live basecalling
-  (you'll need NVIDIA GPU with CUDA installed)
+  (you'll need NVIDIA GPU with CUDA installed either locally or in a remote computer)
   
 * download pre-basecalled Fast5 and run modPhred with pre-basecalled Fast5 files
   (no GPU needed)
@@ -24,51 +24,56 @@ Get raw Fast5 data from `PRJEB22772 <https://www.ebi.ac.uk/ena/data/view/PRJEB22
    cd test
    wget https://public-docs.crg.es/enovoa/public/lpryszcz/src/modPhred/test/ -q --show-progress -r -c -nc -np -nH --cut-dirs=6 --reject="index.html*"
 
-Run modPhred
-^^^^^^^^^^^^
-Running entire modPhred pipeline with live basecalling (~6 minutes):
+Run modPhred (local basecalling)
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+Running entire modPhred pipeline with live basecalling (~6 minutes using RTX2080Ti):
 
 .. code-block:: bash
 
    acc=PRJEB22772
-   ~/src/modPhred/run -f ref/ECOLI.fa -o modPhred/$acc -i $acc/* -t3 --host 10.46.1.65 -p 5556
-
+   ~/src/modPhred/run -f ref/ECOLI.fa -o modPhred/$acc -i $acc/* -t4 --host ~/src/ont-guppy_3.6.1/bin/guppy_basecall_server
+   
 Instead you can run all steps one-by-one as follow:
 
 .. code-block:: bash
 
-   ~/src/modPhred/src/guppy_encode_live.py -i $acc/* -o modPhred/$acc --host 10.46.1.65 -p 5556
+   ~/src/modPhred/src/guppy_encode_live.py -i $acc/* -o modPhred/$acc --host ~/src/ont-guppy_3.6.1/bin/guppy_basecall_server
    ~/src/modPhred/src/guppy_align.py -f ref/ECOLI.fa -o modPhred/$acc -i modPhred/$acc/reads/*
    ~/src/modPhred/src/mod_report.py -f ref/ECOLI.fa -o modPhred/$acc -i $acc/*
    ~/src/modPhred/src/mod_plot.py -i modPhred/$acc/mod.gz
 
 Some examples of visualisation of the obtained results are described :doc:`here <plot>`.
 
-Note, here we separately basecalled Fast5 files and then ran modPhred.
-However in real-live, we **strongly recommend performing on-the-fly basecalling**.
-You'll find more usage information :doc:`here <usage>`.
+Run modPhred (remote basecalling)
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+If you want to run live basecalling using remote instance of guppy (ie from GridION), 
+you'll need to provide the IP and the port at which guppy_basecall_server is listening
+
+.. code-block:: bash
+
+   acc=PRJEB22772
+   ~/src/modPhred/run -f ref/ECOLI.fa -o modPhred/$acc -i $acc/* -t4 --host 10.46.1.65 -p 5556
 
 ModPhred pipeline with basecalled Fast5 files
 ---------------------------------------------
 
 Download pre-basecalled test data
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-If you can't run basecalling, you can download basecalled Fast5 files using:
+If you can't run basecalling, you can download pre-basecalled Fast5 files using:
 
 .. code-block:: bash
 
    wget https://public-docs.crg.es/enovoa/public/lpryszcz/src/modPhred/basecalled/ -q --show-progress -r -c -nc -np -nH --cut-dirs=6 --reject="index.html*"
 
-   
-
-Run modPhred
-^^^^^^^^^^^^
+Run modPhred (pre-basecalled)
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 Running entire modPhred pipeline from basecalled Fast5 files (~4 minutes):
 
 .. code-block:: bash
 
    acc=PRJEB22772; ver=3.4.1
-   ~/src/modPhred/run -f ref/ECOLI.fa -o modPhred/$acc -ri guppy$ver/$acc/* -t3
+   ~/src/modPhred/run -f ref/ECOLI.fa -o modPhred/$acc -ri guppy$ver/$acc/* -t4
 
 Instead you can run all steps one-by-one as follow:
 

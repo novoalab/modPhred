@@ -73,8 +73,6 @@ it means your Fast5 is basecalled with modificatoins.
 
 * If you don't see any of the above, your Fast5 files are not basecalled at all.
 
-Check test directory for information how to generate basecalled Fast5 files.
-
 .. code-block:: bash
 
    > h5ls -r project/sample/workspace/batch_0.fast5 | less

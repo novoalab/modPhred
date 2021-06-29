@@ -22,8 +22,9 @@ modPhred will generate in the output directory ``modPhred/projectName``:
   
   * and additional plots in plots/ directory
 
-In addition, FastQ with encoded modifications as base qualities will be stored in
-``guppy_out/projectName/sample*/workspace/*.fast5.fq.gz`` files.
+* reads/sampleName/**.fastq.gz - basecalled reads in FastQ format
+* reads/sampleName/**.fastm.gz - basecalled reads with modifications encoded in FastM format
+    
 
 Data formats
 ------------
@@ -98,6 +99,27 @@ For example, the mod.gz for ``NC_000913.3:1,061-1,253`` region will look like th
 
 
 
+FastQ
+^^^^^
+A text-based format for storing a nucleotide sequence and its corresponding quality scores, 
+both encoded with a single ASCII character. 
+You can find more details `here <https://en.wikipedia.org/wiki/FASTQ_format>`_. 
+
+FastM
+^^^^^
+A variation of FastQ format, in which instead of quality scores,
+we store probability of the base being modified. 
+You can find more details on modification encoding :doc:`here <encode>`. 
+
+BAM
+^^^
+A binary format for storing raw genomic data. Reads in BAM files are
+typically aligned to reference, compressed and sorted by reference position. 
+**Note, we store modification probability for every base instead of base qualities.**
+More information about modification probability encoding can be found :doc:`here <encode>`. 
+Original base qualities for every alignment are reported under OQ tag. 
+You can find more information about SAM/BAM format `here <https://www.htslib.org/>`_. 
+   
 Why base Y is detected as modified, while model only reports modifications for X?
 ---------------------------------------------------------------------------------
 Let's assume your model detects 5mC. Sometimes non-C reference bases may be detected as modified.

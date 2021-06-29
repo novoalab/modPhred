@@ -17,6 +17,13 @@ from datetime import datetime
 from pathlib import Path
 from guppy_encode import VERSION, is_rna, logger, load_info
 
+# update sys.path & environmental PATH
+root = os.path.dirname(os.path.abspath(sys.argv[0]))
+src = ["./", "src"]
+paths = [os.path.join(root, p) for p in src]
+sys.path = paths + sys.path
+os.environ["PATH"] = "%s:%s"%(':'.join(paths), os.environ["PATH"])
+
 def run_minimap2(ref, fastq, outfn, threads=1, spliced=1, mem=1, tmpdir="/tmp", sensitive=False): 
     """Run minimap2 and sort bam on-the-fly"""
     mode = ["-axmap-ont", ]
@@ -29,9 +36,12 @@ def run_minimap2(ref, fastq, outfn, threads=1, spliced=1, mem=1, tmpdir="/tmp", 
     # add query FastQ files
     #args1 += glob.glob(fastq)
     proc1 = subprocess.Popen(args1, stdout=subprocess.PIPE, stderr=open(outfn[:-4]+".log", "w"))
+    # add baseq to SAM
+    args12 = ["sam_add_qual.py", "-f", ] + " ".join(fastq).replace(".fastm.gz", ".fastq.gz").split()
+    proc12 = subprocess.Popen(args12, stdin=proc1.stdout, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
     # samtools sort process
     args2 = ["samtools", "sort", "-@%s"%threads, "-m%sG"%mem, "-o%s"%outfn, "-"] #"-T /tmp/%s"%fastq, 
-    proc2 = subprocess.Popen(args2, stdin=proc1.stdout, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+    proc2 = subprocess.Popen(args2, stdin=proc12.stdout, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
     # wait to finish and close
     proc2.wait()
     proc2.terminate()

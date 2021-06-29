@@ -15,4 +15,31 @@ This will produce plots similar to this one
 .. image:: cluster.png
    :align: center
    :width: 100%
+
 	   
+Clustering details
+------------------
+
+We perform clustering of reads as follows:
+- user selects a region for read clustering
+  ie. certain transcript or stranded genomic region
+  
+- identify a set of positions that are modified in that region
+  ie. more than 20% of reads are modified (`--minfreq 0.2`)
+  with least 25 reads aligned (`-d / --mindepth 25`) in at least one sample. 
+  Importantly, we include all types of modifications in the analysis by default.
+  Analysis can be limited to single modification using `--mod`. 
+  
+- extract modification probabilities for a set of modified positions
+  from all reads from all samples
+  Note, the reads are filtered by mapping quality `-m / --mapq 15`
+  and their overlap with a selected region: 
+  by default a read has to cover at least 80% of the selected region `--minAlgFrac 0.8`. 
+
+- perform hierarchical clustering & save a figure
+  Only reads are clustered (modified positions are not clustered). 
+  We're using implementation from
+  `seaborn.clustermap <https://seaborn.pydata.org/generated/seaborn.clustermap.html>`_. 
+
+
+At this point we don't report read clusters. 
