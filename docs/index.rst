@@ -17,6 +17,7 @@ The pipeline consists of four steps / modules:
    c. per-read clustering based on modification profiles (mod_cluster.py)
 
 All these scripts can be run separately or as a pipeline by executing ``modPhred/run``.
+You can find more the details in the Methods section. 
 
 .. image:: pipeline.png
    :align: center
@@ -83,7 +84,7 @@ If you find this work useful, please cite:
 Please, consider citing :doc:`dependencies <install>` as well.
 
 .. toctree::
-   :maxdepth: 2
+   :maxdepth: 3
    :hidden:
    :caption: First steps
 	     
@@ -96,10 +97,11 @@ Please, consider citing :doc:`dependencies <install>` as well.
    cluster
 
 .. toctree::
-   :maxdepth: 2
+   :maxdepth: 3
    :hidden:
    :caption: Methods
 	     
+   basecall
    encode
    align
    report

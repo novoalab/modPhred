@@ -9,22 +9,22 @@ If the program was execute command like
 modPhred will generate in the output directory ``modPhred/projectName``:
 
 * mod.gz - internal format with all predicted positions with likely modifications
-* minimap2/*.bam - alignments in BAM format and with encoded modifications.
+* minimap2/\*.bam - alignments in BAM format and with encoded modifications.
   One BAM file will be generated for every sample (directory) provided as input ``-i``.
   Modification probabilities can be :ref:`viewed directly in IGV <visualisation-in-genome-browsers-igv>`.
-  
+
 * .bed - annotated positions with modifications as bedMethyl-formatted files
   
   * mod.bed - combined report of positions with detected modifications in any of the samples
-  * minimap2/*.bam.bed - modified sites reported for each run separetely
-    
+  * minimap2/\*.bam.bed - modified sites reported for each run separetely
+
 * mod.gz.svg - QC plots
   
   * and additional plots in plots/ directory
 
-* reads/sampleName/**.fastq.gz - basecalled reads in FastQ format
-* reads/sampleName/**.fastm.gz - basecalled reads with modifications encoded in FastM format
-    
+* reads/sampleName/\**.fastq.gz - basecalled reads in FastQ format
+* reads/sampleName/\**.fastm.gz - basecalled reads with modifications encoded in FastM format
+
 
 Data formats
 ------------
@@ -118,7 +118,7 @@ typically aligned to reference, compressed and sorted by reference position.
 **Note, we store modification probability for every base instead of base qualities.**
 More information about modification probability encoding can be found :doc:`here <encode>`. 
 Original base qualities for every alignment are reported under OQ tag. 
-You can find more information about SAM/BAM format `here <https://www.htslib.org/>`_. 
+You can find more information about SAM/BAM format at `htslib websites <https://www.htslib.org/>`_. 
    
 Why base Y is detected as modified, while model only reports modifications for X?
 ---------------------------------------------------------------------------------
