@@ -4,10 +4,14 @@ Here you can download the models that were used in the manuscript.
 
 ## DNA model: dna_r9.4.1_450bps_modbases_dam-dcm-cpg_hac.tar.gz
 
+This model can recognise:
+- 5mC in CpG and dcm (CCWGG) contexts
+- 6mA in dam (GATC) context
+
 This model is originally distributed with guppy ver. 3.6.1,
 but it can be used with all newer guppy version.
 We provide this model here because it's not present
-in the newer version of guppy (starting from 4.5.1). 
+in the newer version of guppy (starting from ver. 4.5). 
 
 ## RNA model: rna_r9.4.1_70bps_m6A-m5C-5hmC_hac.tar.gz 
 
