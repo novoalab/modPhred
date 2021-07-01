@@ -23,6 +23,6 @@ with *in vitro* transcribed molecules
 in which either all bases are modified or all are unmodified,
 and because of that it isn't applicable to biological samples in which only some bases
 are expected to be modified. 
-You can fine more details in the supplementary information of the manuscript.
+You can find more details in the supplementary information of the manuscript.
 
 
