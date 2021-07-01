@@ -123,13 +123,15 @@ def main():
     parser.add_argument("-v", "--verbose", action="store_true", help="verbose")    
     parser.add_argument("-i", "--indirs", nargs="+", help="input directories with FastQ files")
     parser.add_argument("-t", "--threads", default=8, type=int, help="number of cores to use [%(default)s]")
-    parser.add_argument("-f", "--fasta", required=1, help="reference FASTA file")
+    parser.add_argument("-f", "--fasta", required=1, type=argparse.FileType('r'), help="reference FASTA file")
     parser.add_argument("-o", "--outdir", default="modPhred", help="output directory [%(default)s]")
     parser.add_argument("-r", "--recursive", action='store_true', help="recursive processing of input directories [%(default)s]")
 
     o = parser.parse_args()
     if o.verbose:
         sys.stderr.write("Options: %s\n"%str(o))
+    # we need name, not file object here
+    o.fasta = o.fasta.name
 
     # get alignments
     mod_align(o.indirs, o.fasta, o.outdir, o.threads, o.recursive)

@@ -388,7 +388,7 @@ def main():
     parser.add_argument("-i", "--indirs", nargs="+", help="input directories with Fast5 files")
     parser.add_argument("-r", "--recursive", action='store_true', help="recursive processing of input directories [%(default)s]")
     parser.add_argument("-o", "--outdir", default="modPhred", help="output directory [%(default)s]")
-    parser.add_argument("-f", "--fasta", required=1, help="reference FASTA file")
+    parser.add_argument("-f", "--fasta", required=1, type=argparse.FileType('r'), help="reference FASTA file")
     parser.add_argument("-m", "--mapq", default=15, type=int, help="min mapping quality [%(default)s]")
     parser.add_argument("-d", "--minDepth", default=25, type=int, help="min depth of coverage [%(default)s]")
     parser.add_argument("--minModFreq", default=0.05, type=float, help="min modification frequency per position [%(default)s]")
@@ -409,9 +409,13 @@ def main():
     o = parser.parse_args()
     if o.verbose:
         sys.stderr.write("Options: %s\n"%str(o))
-
+    # we need name, not file object here
+    o.fasta = o.fasta.name
+    
     logger("===== Welcome, welcome to modPhred pipeline! =====", add_memory=0)
-        
+    if os.path.isdir(o.outdir):
+        logger("Output directory exits. Steps completed previously will be skipped!")
+    
     # encode modifications in FastQ
     if o.host:
         fastq_dirs = mod_encode(o.outdir, o.indirs, o.threads, o.config, o.host, o.port,

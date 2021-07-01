@@ -32,12 +32,12 @@ We perform clustering of reads as follows:
   Analysis can be limited to single modification using ``--mod``. 
   
 - extract modification probabilities for a set of modified positions
-  from all reads from all samples
+  from all reads from all samples. 
   Note, the reads are filtered by mapping quality ``-m / --mapq 15``
   and their overlap with a selected region: 
   by default a read has to cover at least 80% of the selected region ``--minAlgFrac 0.8``. 
 
-- perform hierarchical clustering & save a figure
+- perform hierarchical clustering & save a figure. 
   Only reads are clustered (modified positions are not clustered). 
   We're using implementation from
   `seaborn.clustermap <https://seaborn.pydata.org/generated/seaborn.clustermap.html>`_. 
