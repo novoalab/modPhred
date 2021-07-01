@@ -96,7 +96,7 @@ You can download precomputed modPhred and megalodon results using
 
 .. code-block:: bash
 
-   wget https://public-docs.crg.es/enovoa/public/lpryszcz/src/modPhred/final/  -q --show-progress -r -c -nc -np -nH
+   wget https://public-docs.crg.es/enovoa/public/lpryszcz/src/modPhred/final/ -q --show-progress -r -c -nc -np -nH --cut-dirs=6 --reject="index.html*"
 
 Now, you can compare predictions made by those tools.
 

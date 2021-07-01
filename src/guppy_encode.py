@@ -276,7 +276,7 @@ def worker(args):
 def get_output_fnames(fnames, indir, outdir):
     """Return FastQ directory name and output names for FastQ files"""
     ofnames = []
-    fqdir = os.path.join(outdir, "reads", os.path.basename(indir))
+    fqdir = os.path.join(outdir, "reads", os.path.basename(indir.rstrip(os.path.sep)))
     for fn in fnames:
         ofn = os.path.join(fqdir, fn[len(indir):].lstrip(os.path.sep))
         ofnames.append(ofn)

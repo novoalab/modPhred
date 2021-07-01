@@ -22,14 +22,15 @@ RUN wget -q https://repo.anaconda.com/miniconda/Miniconda3-latest-Linux-x86_64.s
 # dependencies
 RUN . ~/.bashrc && \
     conda install -y minimap2 samtools hdf5 && \
-    pip install h5py matplotlib pysam pandas seaborn && \
-    python3 -c "import matplotlib.pyplot as pyplot" && \
-    wget -q https://github.com/novoalab/modPhred/archive/refs/heads/main.tar.gz && \
-    tar xpfz main.tar.gz && rm main.tar.gz && mv modPhred-main /opt/modPhred
+    pip install h5py matplotlib pysam pandas seaborn
 
 # version-specific dependencies
 RUN . ~/.bashrc && \
     pip install pyguppyclient==0.0.6
+
+# tool
+RUN wget -q https://github.com/novoalab/modPhred/archive/refs/heads/main.tar.gz && \
+    tar xpfz main.tar.gz && rm main.tar.gz && mv modPhred-main /opt/modPhred
 
 # activate conda environment
 ENV PATH /opt/miniconda3/bin:$PATH
