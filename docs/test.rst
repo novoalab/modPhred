@@ -102,11 +102,11 @@ Now, you can compare predictions made by those tools.
 
 .. code-block:: bash
 
-   # separate modPhred predictions for 6mA and 5mC and filter to those with 5% frequency
-   for f in modPhred/PRJEB22772/minimap2/*.bam.bed; do echo $f; for m in 6mA 5mC; do grep -w $m $f | awk '$11>=5' > $f.$m.flt.bed; done; done
+   # separate modPhred predictions for 6mA and 5mC and filter to those with 5% frequency and at least 25 reads aligned
+   for f in modPhred/PRJEB22772/minimap2/*.bam.bed; do echo $f; for m in 6mA 5mC; do grep -w $m $f | awk '$11>=5 && $10>=25' > $f.$m.flt.bed; done; done
    
-   # filter results to only sites with at least 5% of reads carrying modification
-   for f in megalodon/PRJEB22772/*/modified_bases.???.bed; do echo $f; awk '$11>=5' $f > $f.flt.bed; done
+   # filter results to only sites with at least 5% of reads carrying modificationand at least 25 reads aligned
+   for f in megalodon/PRJEB22772/*/modified_bases.???.bed; do echo $f; awk '$11>=5 && $10>=25' $f > $f.flt.bed; done
    
    # get number of predictions for each run
    wc -l modPhred/PRJEB22772/minimap2/*.flt.bed megalodon/PRJEB22772/*/modified_bases*.flt.bed
