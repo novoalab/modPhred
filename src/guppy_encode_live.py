@@ -93,7 +93,7 @@ def basecalling_worker(args):
     kwargs = {} # no trace=True for v0.0.6, v0.0.7a1
     if ver=="0.0.6": _get_read_data = _get_read_data_v006
     elif ver=="0.0.7a1": _get_read_data = _get_read_data_v007a1
-    elif ver=="0.0.9":
+    elif ver in ("0.0.9", "0.1.0"):
         kwargs = {"trace": True}
         _get_read_data = _get_read_data_v009
     else: 
