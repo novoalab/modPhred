@@ -56,7 +56,7 @@ Therefore, you'll need to install pyguppyclient version matching the version of 
  Guppy version   pyguppyclient
                  version
 =============== ===============
- >= 5.0          not supported!
+ >= 5.0          0.1.0
  >= 4.4 & <5.0	 0.0.9                 
  >= 4.0 & <4.4   0.0.7a1         
  >= 3.4 & <4.0   0.0.6           
@@ -93,6 +93,7 @@ Docker image
 We maintain docker image for below versions of guppy:
 
 - 3.6.1 (with pyguppyclient v0.0.6)
+- 5.0.11 (with pyguppyclient v0.1.0) - you'll need CUDA v11.1 and most recent GPU drivers installed!
 
 
 If you want to use it, make sure you have Docker, GPU drivers, CUDA
@@ -109,15 +110,28 @@ is to adjust the version of guppy in the below command:
    cd test
    acc=PRJEB22772		
    docker run --gpus all -u $UID:$GID -v `pwd`:/data lpryszcz/modphred-3.6.1 \
-     /opt/modPhred/run -f /data/ref/ECOLI.fa \
-     -o /data/modPhred/$acc
+     /opt/modPhred/run -f /data/ref/ECOLI.fa -o /data/modPhred/$acc \
      -i /data/$acc/{MARC_ZFscreens_R9.4_1D-Ecoli-run_FAF05145,MARC_ZFscreens_R9.4_2D-Ecoli-run_FAF05711} \
      -t4 --host /usr/bin/guppy_basecall_server
 
-As you can, the above command got a bit complicated. This is because:
+   
+As you can see, the above command got a bit complicated. This is because:
 
 - we need to enable GPU
 - define user & group (otherwise all output files will be owned by root)
 - bind local directory within container
 - and define all input folders (because autocompletion doesn't work inside the container)
 
+Note, dam-dcm-cpg model has been replaced in guppy v4.5 by the new 5mc model,
+so additionally we'll need to specify a model name in the recent versions of guppy.
+
+.. code-block:: bash
+
+   docker run --gpus all -u $UID:$GID -v `pwd`:/data lpryszcz/modphred-5.0.11 \
+     /opt/modPhred/run -f /data/ref/ECOLI.fa -o /data/modPhred5/$acc \
+     -i /data/$acc/{MARC_ZFscreens_R9.4_1D-Ecoli-run_FAF05145,MARC_ZFscreens_R9.4_2D-Ecoli-run_FAF05711} \
+     -t4 --host /usr/bin/guppy_basecall_server -c dna_r9.4.1_450bps_modbases_5mc_hac.cfg
+
+
+If you wish to use the original dam-dcm-cpg model with the latest versions of guppy,      
+you can find a copy in the `/data folder in modPhred repository <https://github.com/novoalab/modPhred/tree/main/data>`_. 
