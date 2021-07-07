@@ -117,7 +117,8 @@ A binary format for storing raw genomic data. Reads in BAM files are
 typically aligned to reference, compressed and sorted by reference position. 
 **Note, we store modification probability for every base instead of base qualities.**
 More information about modification probability encoding can be found :doc:`here <encode>`. 
-Original base qualities for every alignment are reported under OQ tag. 
+
+Original base qualities can be saved in BAM under OQ tag using ``-s / --storeQuals``. 
 You can find more information about SAM/BAM format at `htslib websites <https://www.htslib.org/>`_. 
    
 Why base Y is detected as modified, while model only reports modifications for X?

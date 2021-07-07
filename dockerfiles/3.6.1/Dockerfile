@@ -4,7 +4,7 @@ FROM genomicpariscentre/guppy-gpu:3.6.1
 # File Author / Maintainer
 MAINTAINER Leszek Pryszcz <lpryszcz@crg.es>
 
-ARG PACKAGE_VERSION=3.6.1
+ARG PACKAGE_VERSION=1.0b
 ARG BUILD_PACKAGES="wget apt-transport-https"
 ARG DEBIAN_FRONTEND=interactive
 
@@ -29,7 +29,7 @@ RUN . ~/.bashrc && \
     pip install pyguppyclient==0.0.6
 
 # tool
-RUN wget -q https://github.com/novoalab/modPhred/archive/refs/heads/main.tar.gz && \
+RUN wget -q  https://github.com/novoalab/modPhred/archive/refs/heads/main.tar.gz && \
     tar xpfz main.tar.gz && rm main.tar.gz && mv modPhred-main /opt/modPhred
 
 # activate conda environment

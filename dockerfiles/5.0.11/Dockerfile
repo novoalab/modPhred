@@ -4,7 +4,7 @@ FROM genomicpariscentre/guppy-gpu:5.0.11
 # File Author / Maintainer
 MAINTAINER Leszek Pryszcz <lpryszcz@crg.es>
 
-ARG PACKAGE_VERSION=5.0.11
+ARG PACKAGE_VERSION=1.0b
 ARG BUILD_PACKAGES="wget apt-transport-https"
 ARG DEBIAN_FRONTEND=interactive
 
@@ -30,7 +30,7 @@ RUN . ~/.bashrc && \
     pip install cython pyguppyclient==0.1.0
 
 # tool
-RUN wget -q https://github.com/novoalab/modPhred/archive/refs/heads/main.tar.gz && \
+RUN wget -q  https://github.com/novoalab/modPhred/archive/refs/heads/main.tar.gz && \
     tar xpfz main.tar.gz && rm main.tar.gz && mv modPhred-main /opt/modPhred
 
 # clean-up
