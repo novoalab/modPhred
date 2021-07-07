@@ -307,7 +307,6 @@ def main():
     parser.add_argument("-o", "--outdir", default="modPhred", help="output directory [%(default)s]")
     parser.add_argument("-r", "--recursive", action='store_true', help="recursive processing of input directories [%(default)s]")
     parser.add_argument("-t", "--threads", default=6, type=int, help="number of cores to use [%(default)s]")
-    #parser.add_argument("--basecall_group",  default="", help="basecall group to use from Fast5 file [last basecalling]")
     parser.add_argument("--MaxModsPerBase", default=MaxModsPerBase, type=int, help=argparse.SUPPRESS)
     parser.add_argument("-c", "--config", default="dna_r9.4.1_450bps_modbases_dam-dcm-cpg_hac.cfg", help="guppy model [%(default)s]")
     parser.add_argument("--host", "--guppy_basecall_server", default="localhost",

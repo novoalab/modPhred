@@ -396,7 +396,9 @@ def main():
     parser.add_argument("-b", "--bed", help="BED file with regions to analyse [optionally]")
     #parser.add_argument("-b", "--minBA", default=0.0, type=float, help="min basecall accuracy [%(default)s]")
     #parser.add_argument("-m", "--minModMeanProb", default=0.05, type=float, help="min modification mean probability [%(default)s]")
+    parser.add_argument("-s", "--storeQuals", action='store_true', help="store base qualities in BAM [%(default)s]")
     parser.add_argument("-t", "--threads", default=6, type=int, help="number of cores to use [%(default)s]")
+    parser.add_argument("--cleanup", action='store_true', help="remove FastQ/M files [%(default)s]")
     parser.add_argument("--MaxModsPerBase", default=MaxModsPerBase, type=int, help=argparse.SUPPRESS)
     fast5 = parser.add_argument_group("Basecalled Fast5 options")
     fast5.add_argument("--basecall_group",  default="", help="basecall group to use from Fast5 file [latest]")
@@ -425,7 +427,7 @@ def main():
         fastq_dirs = guppy_encode.mod_encode(o.outdir, o.indirs, o.threads, o.basecall_group,
                                              o.MaxModsPerBase, o.recursive)
     # align
-    mod_align(fastq_dirs, o.fasta, o.outdir, o.threads, o.recursive)
+    mod_align(fastq_dirs, o.fasta, o.outdir, o.threads, o.recursive, o.storeQuals)
     # process everything only if outfile does not exists
     outfn = os.path.join(o.outdir, "mod.gz")
     if not os.path.isfile(outfn):
@@ -473,6 +475,10 @@ def main():
         # nothint to plot if single sample
     except Exception as e:
         logger("[ERROR] Plotting scatterplots failed (%s).\n"%str(e))
+
+    # clean-up or message
+    if o.cleanup: os.system("rm -r %s/reads/"%o.outdir)
+    else: logger("You can remove reads directory: rm -r %s/reads/"%o.outdir)
     logger("All finished! Have a nice day :)")
 
 if __name__=='__main__': 

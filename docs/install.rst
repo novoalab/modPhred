@@ -92,8 +92,10 @@ Docker image
 ------------
 We maintain docker image for below versions of guppy:
 
-- 3.6.1 (with pyguppyclient v0.0.6)
-- 5.0.11 (with pyguppyclient v0.1.0) - you'll need CUDA v11.1 and most recent GPU drivers installed!
+- `3.6.1 <https://hub.docker.com/repository/docker/lpryszcz/modphred-3.6.1>`_
+  (with pyguppyclient v0.0.6)
+- `5.0.11 <https://hub.docker.com/repository/docker/lpryszcz/modphred-5.0.11>`_
+  (with pyguppyclient v0.1.0) - you'll need CUDA v11.1 and most recent GPU drivers installed!
 
 
 If you want to use it, make sure you have Docker, GPU drivers, CUDA

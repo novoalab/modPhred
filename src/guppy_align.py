@@ -24,7 +24,8 @@ paths = [os.path.join(root, p) for p in src]
 sys.path = paths + sys.path
 os.environ["PATH"] = "%s:%s"%(':'.join(paths), os.environ["PATH"])
 
-def run_minimap2(ref, fastq, outfn, threads=1, spliced=1, mem=1, tmpdir="/tmp", sensitive=False): 
+def run_minimap2(ref, fastq, outfn, threads=1, storeQuals=False, spliced=1,
+                 mem=1, tmpdir="/tmp", sensitive=False): 
     """Run minimap2 and sort bam on-the-fly"""
     mode = ["-axmap-ont", ]
     if spliced:
@@ -37,8 +38,11 @@ def run_minimap2(ref, fastq, outfn, threads=1, spliced=1, mem=1, tmpdir="/tmp", 
     #args1 += glob.glob(fastq)
     proc1 = subprocess.Popen(args1, stdout=subprocess.PIPE, stderr=open(outfn[:-4]+".log", "w"))
     # add baseq to SAM
-    args12 = ["sam_add_qual.py", "-f", ] + " ".join(fastq).replace(".fastm.gz", ".fastq.gz").split()
-    proc12 = subprocess.Popen(args12, stdin=proc1.stdout, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+    if storeQuals:
+        args12 = ["sam_add_qual.py", "-f", ] + " ".join(fastq).replace(".fastm.gz", ".fastq.gz").split()
+        proc12 = subprocess.Popen(args12, stdin=proc1.stdout, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+    else:
+        proc12 = proc1
     # samtools sort process
     args2 = ["samtools", "sort", "-@%s"%threads, "-m%sG"%mem, "-o%s"%outfn, "-"] #"-T /tmp/%s"%fastq, 
     proc2 = subprocess.Popen(args2, stdin=proc12.stdout, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
@@ -46,7 +50,7 @@ def run_minimap2(ref, fastq, outfn, threads=1, spliced=1, mem=1, tmpdir="/tmp", 
     proc2.wait()
     proc2.terminate()
 
-def mod_align(indirs, ref, outdir, threads, recursive=False, bamdir="minimap2"):
+def mod_align(indirs, ref, outdir, threads, recursive=False, storeQuals=False, bamdir="minimap2"):
     """Align *.fq.gz files from input dirs and store sorted .bam in outdir/minimap2"""
     logger("Aligning FastQ files from %s directories...\n"%len(indirs))
     # prepare output directory
@@ -66,7 +70,7 @@ def mod_align(indirs, ref, outdir, threads, recursive=False, bamdir="minimap2"):
             fq = sorted(map(str, Path(indir).rglob('*.fastm.gz')))
         else:
             fq = sorted(map(str, Path(indir).glob('*.fastm.gz')))
-        run_minimap2(ref, fq, outfn, threads, spliced=is_rna(indir))
+        run_minimap2(ref, fq, outfn, threads, storeQuals, spliced=is_rna(indir))
         # update dump info
         dump_updated_info(indir, outdir, outfn)
 
@@ -126,6 +130,7 @@ def main():
     parser.add_argument("-f", "--fasta", required=1, type=argparse.FileType('r'), help="reference FASTA file")
     parser.add_argument("-o", "--outdir", default="modPhred", help="output directory [%(default)s]")
     parser.add_argument("-r", "--recursive", action='store_true', help="recursive processing of input directories [%(default)s]")
+    parser.add_argument("-s", "--storeQuals", action='store_true', help="store base qualities in BAM [%(default)s]")
 
     o = parser.parse_args()
     if o.verbose:
@@ -134,7 +139,7 @@ def main():
     o.fasta = o.fasta.name
 
     # get alignments
-    mod_align(o.indirs, o.fasta, o.outdir, o.threads, o.recursive)
+    mod_align(o.indirs, o.fasta, o.outdir, o.threads, o.recursive, o.storeQuals)
     
 if __name__=='__main__': 
     t0 = datetime.now()
