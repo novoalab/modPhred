@@ -33,7 +33,8 @@ Running entire modPhred pipeline with live basecalling (~6 minutes using RTX2080
    acc=PRJEB22772
    ~/src/modPhred/run -f ref/ECOLI.fa -o modPhred/$acc -i $acc/* -t4 --host ~/src/ont-guppy_3.6.1/bin/guppy_basecall_server
    
-Note, you can enable automatic removal of intermediate files (FastQ/M) using ``--cleanup``. 
+Note, you can enable automatic removal of intermediate files (FastQ/M) using ``--cleanup``.
+
 Instead you can run all steps one-by-one as follow:
 
 .. code-block:: bash
