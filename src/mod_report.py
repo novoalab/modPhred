@@ -103,43 +103,33 @@ def is_qcfail(a, mapq=15, flag=1792): #
         return True
     return False
 
-def bam2calls(bam, ref, start, end, mapq, minModProb, MaxPhredProb):
+def bam2calls(sam, ref, start, end, mapq, minModProb, MaxPhredProb):
     """Generator of basecalls and mod qualities from BAM file encoded as floats for +/- strand"""
-    sam = pysam.AlignmentFile(bam)
     # prepare storage for quals -- this can be memory & speed optimised
     quals = [[[] for x in range(end-start+1)], [[] for x in range(end-start+1)]]
-    # stop if ref not in sam file
-    if ref not in sam.references:
-        if ref.startswith('chr') and ref[3:] in sam.references:
-            ref = ref[3:]
-        elif 'chr%s'%ref in sam.references:
-            ref = 'chr%s'%ref
     p = 0
+    empty = []
     for a in sam.fetch(ref, start, end):
         # skip low quality alignments, not primary, QC fails, duplicates or supplementary algs
-        if is_qcfail(a, mapq):
-            continue
-        # yield some results and release a bit of memory
+        if is_qcfail(a, mapq): continue
+        # yield some results
         while p<a.pos-start:
-            for i in range(2):
-                yield quals[i][p]
-            # release some memory dude
-            quals[0][p] = quals[1][p] = []
+            yield quals[0][p]
+            yield quals[1][p]
+            # and release a bit of memory
+            quals[0][p] = quals[1][p] = empty
             p += 1
-        # get transcript strand
-        si = 0 # for +/for si == 0; for -/rev si==1
-        # unstranded or secondstrand
-        if a.is_reverse:
-            si = 1
+        # get transcript strand: this is for secondstrand or dRNAseq
+        si = 1 if a.is_reverse else 0 # si==0: +/for; si==1: -/rev
         # store alignment blocks
         quals = store_blocks(a, start, end, si, quals, minModProb, MaxPhredProb)
     # yield last bit of calls
     while p<len(quals[0]):
-        for i in range(2):
-            yield quals[i][p]
+        yield quals[0][p]
+        yield quals[1][p]
         p += 1
     
-def fasta2bases(fastafn, ref, start, end, strands="+-"):
+def fasta2bases(faidx, ref, start, end):
     """Generator of individual bases from FastA file.
 
     The output consists of: 
@@ -149,21 +139,18 @@ def fasta2bases(fastafn, ref, start, end, strands="+-"):
     - base (complement for -)
     - base index in alphabet (relative to + strand)
     """
-    fasta = pysam.FastaFile(fastafn)
-    if ref not in fasta.references:
+    if ref not in faidx:
         raise StopIteration
-    for pos, refbase in enumerate(fasta.fetch(ref, start, end), start+1):
-        refbase = refbase.upper()
+    seq = faidx.fetch(ref, start, end).upper()
+    for pos, refbase in enumerate(seq, start+1):
         # update refbase and get appropriate cols
         if refbase in base2index:
             refi = base2index[refbase]
         else:
             sys.stderr.write("[WARNING] %s:%s %s not in alphabet (%s). Marking as N.\n"%(ref, pos, refbase, alphabet))
             refbase, refi = "N", 0 # N
-        for si, strand in enumerate(strands):
-            if si:
-                refbase = base2complement[refbase]
-            yield pos, si, strand, refbase, refi
+        yield pos, 0, "+", refbase, refi
+        yield pos, 1, "-", base2complement[refbase], refi
 
 def get_modCount(strand_calls, bams, maxNmods, MaxPhredProb, minModProb):
     """Return modCount array that count for each bam and every base
@@ -188,16 +175,20 @@ def get_modCount(strand_calls, bams, maxNmods, MaxPhredProb, minModProb):
     return modCount, probs
         
 def get_calls(position, fasta, bams, MaxPhredProb, can2mods,
-              mapq=15, minDepth=25, minModFreq=0.01, minModProb=0.5, strands = "+-"):
+              mapq=15, minDepth=25, minModFreq=0.01, minModProb=0.5):
     """Return modified positions from given region"""
     # get region info
     ref, start, end = position
     info = []
     posinfo = "%s\t%s\t%s>%s%s"
     # get actual max no of modifications per base
-    maxNmods = max(map(len, can2mods.values())) 
-    refparser = fasta2bases(fasta, ref, start, end, strands)
-    parsers = [bam2calls(bam, ref, start, end, mapq, minModProb, MaxPhredProb) for bam in bams]
+    maxNmods = max(map(len, can2mods.values()))
+    # init faidx and sam once and reuse - this saves ~0.5s per region
+    ## to it via init_args and global args
+    #faidx = pysam.FastaFile(fasta)
+    #sams = [pysam.AlignmentFile(bam) for bam in bams]
+    refparser = fasta2bases(faidx, ref, start, end)
+    parsers = [bam2calls(sam, ref, start, end, mapq, minModProb, MaxPhredProb) for sam in sams]
     for data in zip(refparser, *parsers):
         (pos, si, strand, refbase, refi) = data[0]
         calls = data[1:]
@@ -232,57 +223,77 @@ def worker(args):
     data = get_calls(*args)
     return data
     
-def get_coverage(args):
-    """Return array of coverage for given chromosome for given BAM."""
-    bam, ref, mapq = args
-    sam = pysam.Samfile(bam)
-    ref2len = {r: l for r, l in zip(sam.references, sam.lengths)}
-    coverage = np.zeros(ref2len[ref], dtype='uint16')
-    for a in sam.fetch(reference=ref):
-        # skip low quality alignments, not primary, QC fails, duplicates or supplementary algs
-        if is_qcfail(a, mapq):
-            continue
-        '''# for some reason no blocks for LAST output
-        if a.blocks:
-            for s, e in a.blocks:
-                coverage[s:e] += 1
-        else:'''
-        # get coverage ignoring introns
-        coverage[a.pos:a.aend] += 1
-    return coverage
-
 def get_consecutive(data, stepsize=1):
     """Return consecutive windows allowing given max. step size"""
     return np.split(data, np.where(np.diff(data) > stepsize)[0]+1)
 
-def get_covered_regions_per_bam(bams, threads=4, mapq=15, mincov=1, verbose=1, chrs=[], 
-                                maxdist=16000, step=20000):
-    """Return chromosome regions covered by at least mincov."""
-    regions = []
-    p = Pool(threads)
-    sam = pysam.Samfile(bams[0])
-    references, lengths = sam.references, sam.lengths
-    for ref, length in zip(references, lengths):
-        if chrs and ref not in chrs:
-            if verbose:
-                sys.stderr.write(" skipped %s\n"%ref)
-            continue
-        coverage = np.zeros(length, dtype='uint16')
-        for _coverage in p.imap_unordered(get_coverage, [(bam, ref, mapq) for bam in bams]):
-            coverage = np.max([coverage, _coverage], axis=0)
-        # get regions with coverage
-        covered = np.where(coverage>=mincov)[0]
-        for positions in get_consecutive(covered, maxdist):
-            if len(positions)<1:
-                continue
-            s, e = positions[0]+1, positions[-1]+1
-            # further split regions for max step size windows
-            while s < e-step:
-                regions.append((ref, s, s+step)) #yield ref, s, s+step
-                s += step
-            regions.append((ref, s, e)) #yield ref, s, e
-    return regions
+def get_coverage_for_ref(sam, ref, mapq, reflen): 
+    """Return coverage from sam (pysam.AlignmentFile)"""
+    coverage = np.zeros(reflen, dtype='uint16')
+    for a in sam.fetch(ref):
+        if is_qcfail(a, mapq): continue
+        if a.blocks:
+            for s, e in a.blocks: coverage[s:e] += 1
+        else: coverage[a.pos:a.aend] += 1
+    return coverage
+
+def get_covered_regions(bams, fasta, threads=6, mapq=20, minCov=10, maxdist=16000, step=20000):
+    """Return regions covered by at least minCov reads.
     
+    Here, we only analyse the file with lower number of reads.
+    """
+    # iterate chromosomes
+    sams = [pysam.AlignmentFile(bam, threads=threads) for bam in bams]
+    # file with fewer alignemnts first
+    sams = list(sorted(sams, key=lambda x: x.mapped))
+    sam = sams[0]
+    faidx = pysam.FastaFile(fasta)
+    regions = []
+    logger("Retrieving regions covered by %s+ reads..."%minCov)
+    # first run idxstats and skip references with <10 reads altogether - usefull for transcript alignements
+    ref2algs = {s.contig: s.mapped for s in sam.get_index_statistics()}
+    ref2len = {r: l for r, l in zip(sam.references, sam.lengths)}
+    bases = 0
+    # get references with enough alignments
+    refs = [r for r, c in ref2algs.items() if c>=minCov and r in faidx]
+    # catch transcript alignments
+    if len(ref2len)>3000:
+        # just get transcripts with minCov alignments
+        for ref in refs:
+            s, e = 0, ref2len[ref]
+            bases += e
+            # further split regions for max windows
+            while s < e-step:
+                regions.append((ref, s, s+step))
+                s += step
+            regions.append((ref, s, e))
+    else:
+        for ri, ref in enumerate(refs, 1):
+            sys.stderr.write(" %s / %s %s ...\r"%(ri, len(sam.references), ref))
+            #if ri>100:break
+            # get min coverage from bam file that has fewer mapped reads
+            coverage = get_coverage_for_ref(sam, ref, mapq, ref2len[ref])
+            # get regions with minCov coverage
+            covered = np.where(coverage>=minCov)[0]
+            for positions in get_consecutive(covered, maxdist):
+                if len(positions)<1: continue
+                s, e = positions[0]+1, positions[-1]+1
+                bases += e-s
+                # further split regions for max windows
+                while s < e-step:
+                    regions.append((ref, s, s+step))
+                    s += step
+                regions.append((ref, s, e))
+    logger(" {:,} bases in {:,} regions to process.\n".format(bases, len(regions)))
+    return regions
+
+def init_args(*args):
+    """Share globals with pool of workers"""
+    global sams, faidx
+    bams, fasta = args
+    sams = [pysam.AlignmentFile(bam) for bam in bams]
+    faidx = pysam.FastaFile(fasta)
+
 def mod_report(outfn, bam, fasta, threads, regionsfn, MaxPhredProb, can2mods,
                mapq=15, minDepth=25, minModFreq=0.1, minModProb=0.5, logger=sys.stderr.write):
     """Get modifications from bam files"""
@@ -297,20 +308,15 @@ def mod_report(outfn, bam, fasta, threads, regionsfn, MaxPhredProb, can2mods,
     if regionsfn:
         regions = load_bed(regionsfn)
     else:
-        regions = get_covered_regions_per_bam(bam, threads, mapq, minDepth)
+        regions = get_covered_regions(bam, fasta, threads, mapq, minDepth)
     logger("  %s regions to process..."%len(regions))
     # define imap, either pool of processes or map
-    if threads<2:
-        imap = map
-        np.seterr(all='ignore') # ignore all warnings
-    else:
-        p = Pool(threads, maxtasksperchild=10)
-        imap = p.imap
+    p = Pool(threads, initializer=init_args, initargs=(bam, fasta), maxtasksperchild=100)
     # start genotyping
     i = 0
-    parser = imap(worker, ((pos, fasta, bam, MaxPhredProb, can2mods,
-                            mapq, minDepth, minModFreq, minModProb)
-                           for pos in regions))
+    parser = p.imap(worker, ((pos, fasta, bam, MaxPhredProb, can2mods,
+                              mapq, minDepth, minModFreq, minModProb)
+                             for pos in regions))
     for i, data in enumerate(parser, 1):
         sys.stderr.write(" %s / %s [memory: %7.1f Mb]\r"%(i, len(regions), memory_usage()))
         out.write(data)
@@ -483,11 +489,16 @@ def main():
 
 if __name__=='__main__': 
     t0 = datetime.now()
+    os.setpgrp() # create new process group, become its leader    
     try:
         main()
     except KeyboardInterrupt:
         sys.stderr.write("\nCtrl-C pressed!      \n")
-    #except IOError as e:
-    #    sys.stderr.write("I/O error({0}): {1}\n".format(e.errno, e.strerror))
-    dt = datetime.now()-t0
-    sys.stderr.write("#Time elapsed: %s\n"%dt)
+    except Exception as err:
+        import signal, traceback
+        sys.stderr.write(traceback.format_exc()+"\n")
+        os.killpg(0, signal.SIGTERM) # terminate all processes in my group
+    finally:
+        dt = datetime.now()-t0
+        sys.stderr.write("#Time elapsed: %s    \n"%dt)
+

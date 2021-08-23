@@ -9,6 +9,9 @@ Dependencies: h5py
 TO DO:
 - drop low quality reads
 - ignore low quality bases
+- store FastQ only if needed (~33% increase in speed)
+- merge guppy_encode & guppy_encode_live ie replacing minimap2 with mappy
+- add polyA tail estimation
 """
 epilog="""Author: l.p.pryszcz+git@gmail.com
 Barcelona, 20/06/2019
@@ -24,7 +27,7 @@ VERSION = '1.0b'
 # set max 3 modifications per each base
 MaxModsPerBase = 3
 MaxProb = 256
-QUALS = "".join(map(chr, range(33, 127)))
+QUALS = np.array(list(map(chr, range(33, 127)))) #"".join(map(chr, range(33, 127)))
 # it's only DNA as in SAM U should be A
 base2complement = {"A": "T", "T": "A", "C": "G", "G": "C", "N": "N"}
 
@@ -179,28 +182,25 @@ def get_alphabet(output_alphabet, mods, canonical_bases="ACGTU", force_rna=0):
 def get_phredmodprobs(seq, modbaseprobNorm, mods2count, base2positions, canonical2mods, MaxPhredProb):
     """Return PHRED scaled probability of given base being modified"""
     # prepare phred str as numpy array
-    phredmodprobs = np.empty(len(seq), dtype='|S1') #array(([QUALS[prob+MaxPhredProb*idx]]*len(seq))
+    phredmodprobs = np.empty(len(seq), dtype='|S1')
     phredmodprobs[:] = QUALS[0]
     # get positions of each base that can be modified
-    base2idx = {b: [] for b in base2positions if len(base2positions[b])>1}
-    for ii, b in enumerate(seq): # this can be likely faster with mask or just seq=="A"
-        if b in base2idx:
-            base2idx[b].append(ii)
+    seq = np.array(list(seq)) # ~10x faster than iterating through seq and comparing to b
+    base2idx = {b: np.argwhere(seq==b)[:, 0] # 25% faster than .flatten()
+                for b in base2positions if len(base2positions[b])>1}
     # calculate PHRED scaled modification probability for each base that can be modified
     for b, ii in base2idx.items():
         # only calculate indices max if more than 1 modification per base
         if len(base2positions[b])>2:
             s, e = base2positions[b][1], base2positions[b][-1]+1
-            #print(b, modbaseprobNorm[ii].shape, s, e, len(ii))#; print(modbaseprobNorm[ii,s-1:e])
             probs = modbaseprobNorm[ii, s:e]
             indices = np.argmax(probs, axis=1)
             probs = np.max(probs, axis=1)
         else:
             probs = modbaseprobNorm[ii, base2positions[b][1]] 
             indices = np.zeros(probs.shape[0], dtype='int')
-        #print(probs, indices)
-        # update PHRED
-        phredmodprobs[ii] = [QUALS[v] for v in probs+indices*MaxPhredProb]
+        # update PHRED - this takes ~46% of the function time
+        phredmodprobs[ii] = QUALS[probs+indices*MaxPhredProb]
         # calculate stats
         for idx in range(len(base2positions[b])-1):
             mods2count[canonical2mods[b][idx]] += np.sum(probs[indices==idx]>=0.5*MaxPhredProb)
@@ -227,7 +227,7 @@ def worker(args):
     # process entries in fast5
     h5 = h5py.File(fn, 'r')
     for i, rname in enumerate(h5):
-        #if i>100: break
+        #if i>=100: break
         # try to load base modification probabilities
         try:                
             if not basecall_group:
@@ -261,6 +261,7 @@ def worker(args):
         # get modprobs as qualities
         phredmodprobs, mod2count = get_phredmodprobs(seq, modbaseprobNorm, mods2count, base2positions, canonical2mods, MaxPhredProb)
         # store FastQ and FastM
+        ## those two take 33+37% of function time & out2 is needed only sometimes!
         out2.write("@%s\n%s\n+\n%s\n"%(read_name, seq, qual))
         out.write("@%s\n%s\n+\n%s\n"%(read_name, seq, phredmodprobs))
     # report number of bases
