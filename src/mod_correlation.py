@@ -16,7 +16,7 @@ import numpy as np
 import pandas as pd
 import seaborn as sns
 from guppy_encode import *
-from mod_report import is_qcfail, base2index, code2function
+from mod_report import is_qcfail, base2index, code2function, get_can2mods
 
 complement = {"A": "T", "C": "G", "G": "C", "T": "A"}
 
