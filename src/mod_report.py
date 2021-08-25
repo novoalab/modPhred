@@ -14,13 +14,12 @@ epilog="""Author: l.p.pryszcz+git@gmail.com
 Barcelona, 21/06/2019
 """
 
-import glob, gzip, os, pickle, pysam, sys, zlib
+import glob, gzip, os, pysam, sys, zlib
 from datetime import datetime
 from multiprocessing import Pool
 import numpy as np
 import pandas as pd
-from guppy_encode_live import mod_encode, HEADER, VERSION, logger, memory_usage, load_info, base2complement, MaxModsPerBase
-from guppy_align import mod_align
+from guppy_encode import *
 from mod_plot import load_bed
 from pathlib import Path
 import mod_plot
@@ -329,7 +328,7 @@ def get_rgb(mod_color, freq):
     rgb = mod_color * int(round(255*freq))
     return ",".join(map(str, rgb))
 
-def mod_bed(data, outdir, minModFreq=0.1):
+def mod_bed(data, outdir, symbol2modbase, minModFreq=0.1):
     """Generate bedMethyl (BED-formatted) modification output:
     
     Reference chromosome or scaffold
@@ -348,7 +347,7 @@ def mod_bed(data, outdir, minModFreq=0.1):
     colors = np.array([(0, 1, 0), (0, 0, 1), (1, 0, 0), (0, 1, 1), (1, 0, 1), (1, 1, 0), (1, 1, 1)], dtype=int)
     # load info & get mod2color - colors may repeat
     mod2color = {}
-    for i, m in enumerate(load_info(outdir)["symbol2modbase"].values()):
+    for i, m in enumerate(symbol2modbase.values()):
         mod2color[m] = colors[i%len(colors)]
         
     outfn = os.path.join(outdir, "mod.bed")
@@ -393,6 +392,7 @@ def main():
     parser.add_argument("-v", "--verbose", default=False, action="store_true", help="verbose")    
     parser.add_argument("-i", "--indirs", nargs="+", help="input directories with Fast5 files")
     parser.add_argument("-r", "--recursive", action='store_true', help="recursive processing of input directories [%(default)s]")
+    parser.add_argument("--rna", action='store_true', help="project is RNA sequencing [DNA]")
     parser.add_argument("-o", "--outdir", default="modPhred", help="output directory [%(default)s]")
     parser.add_argument("-f", "--fasta", required=1, type=argparse.FileType('r'), help="reference FASTA file")
     parser.add_argument("-m", "--mapq", default=15, type=int, help="min mapping quality [%(default)s]")
@@ -400,20 +400,17 @@ def main():
     parser.add_argument("--minModFreq", default=0.05, type=float, help="min modification frequency per position [%(default)s]")
     parser.add_argument("--minModProb", default=0.50, type=float, help="min modification probability per base [%(default)s]")
     parser.add_argument("-b", "--bed", help="BED file with regions to analyse [optionally]")
-    #parser.add_argument("-b", "--minBA", default=0.0, type=float, help="min basecall accuracy [%(default)s]")
-    #parser.add_argument("-m", "--minModMeanProb", default=0.05, type=float, help="min modification mean probability [%(default)s]")
-    parser.add_argument("-s", "--storeQuals", action='store_true', help="store base qualities in BAM [%(default)s]")
     parser.add_argument("-t", "--threads", default=6, type=int, help="number of cores to use [%(default)s]")
-    parser.add_argument("--cleanup", action='store_true', help="remove FastQ/M files [%(default)s]")
-    parser.add_argument("--MaxModsPerBase", default=MaxModsPerBase, type=int, help=argparse.SUPPRESS)
-    fast5 = parser.add_argument_group("Basecalled Fast5 options")
-    fast5.add_argument("--basecall_group",  default="", help="basecall group to use from Fast5 file [latest]")
-    guppy = parser.add_argument_group("Basecalling options") #mutually_exclusive
+    parser.add_argument("--tag", default="", help="SAM tag to store original qualities ie. OQ [skipped]")
+    guppy = parser.add_argument_group("Basecalling options")
     guppy.add_argument("-c", "--config", default="dna_r9.4.1_450bps_modbases_dam-dcm-cpg_hac.cfg", help="guppy model [%(default)s]")
     guppy.add_argument("--host", "--guppy_basecall_server", default=None,
                         help="guppy server hostname or path to guppy_basecall_server binary [assumes files are already basecalled with modifications]")
-    guppy.add_argument("-p", "--port", default=5555, type=int,
+    guppy.add_argument("--port", default=5555, type=int,
                         help="guppy server port (this is ignored if binary is provided) [%(default)s]")
+    guppy.add_argument("--device", default="cuda:0", help="CUDA device to use (works only if --host guppy_basecall_server_path) [%(default)s]")
+    guppy.add_argument("--timeout", default=10*60, help="timeout in seconds to process each Fast5 file [%(default)s]")
+    
     o = parser.parse_args()
     if o.verbose:
         sys.stderr.write("Options: %s\n"%str(o))
@@ -424,39 +421,32 @@ def main():
     if os.path.isdir(o.outdir):
         logger("Output directory exits. Steps completed previously will be skipped!")
     
-    # encode modifications in FastQ
-    if o.host:
-        fastq_dirs = mod_encode(o.outdir, o.indirs, o.threads, o.config, o.host, o.port,
-                                o.MaxModsPerBase, o.recursive)
-    else:
-        import guppy_encode
-        fastq_dirs = guppy_encode.mod_encode(o.outdir, o.indirs, o.threads, o.basecall_group,
-                                             o.MaxModsPerBase, o.recursive)
-    # align
-    mod_align(fastq_dirs, o.fasta, o.outdir, o.threads, o.recursive, o.storeQuals)
+    # encode modifications in BAM
+    bamfiles = mod_encode(o.outdir, o.indirs, o.fasta, o.threads, o.rna,
+                          o.config, o.host, o.port,
+                          o.recursive, o.device, o.timeout, o.tag)
+        
+    # load info
+    fnames, basecount, mods2count, md = get_mod_data(bamfiles[0])
+    alphabet, symbol2modbase, canonical2mods, base2positions = get_alphabet(md['base_mod_alphabet'], md['base_mod_long_names'])
+    MaxPhredProb = md["MaxPhredProb"]
+    # U>T patch for RNA mods
+    if "U" in can2mods:
+        can2mods["T"] = can2mods["U"]
+    
     # process everything only if outfile does not exists
     outfn = os.path.join(o.outdir, "mod.gz")
     if not os.path.isfile(outfn):
-        # load info
-        data = load_info(o.outdir)
-        MaxPhredProb = data["MaxPhredProb"]
-        bamfiles = data["bam"]
-        #bamfiles.sort()
-        # index
-        logger("Indexing bam file(s)...")
-        for fn in bamfiles:
-            if not os.path.isfile(fn+".bai"):
-                cmd = "samtools index %s"%fn
-                if o.verbose:
-                    sys.stderr.write(" %s\n"%cmd)
-                os.system(cmd)
         # BAM > modifications
         # get can2mods ie {'A': ['6mA'], 'C': ['5mC'], 'G': [], 'T': []}
-        can2mods = {b: [data["symbol2modbase"][m] for m in mods]
-                    for b, mods in data["canonical2mods"].items()}
-        # U>T patch for RNA mods
-        if "U" in can2mods:
-            can2mods["T"] = can2mods["U"]
+        can2mods = {b: [symbol2modbase[m] for m in mods]
+                    for b, mods in canonical2mods.items()}
+        # the index is already created by mod_encode, but let's keep it
+        logger("Indexing BAM file(s)...")
+        for fn in bamfiles:
+            if not os.path.isfile(fn+".bai") and not os.path.isfile(fn+".csi"):
+                logger(" %s"%fn)
+                pysam.index(fn)
         mod_report(outfn, bamfiles, o.fasta, o.threads, o.bed, MaxPhredProb, can2mods, 
                    o.mapq, o.minDepth, o.minModFreq, o.minModProb, logger=logger)
     else:
@@ -469,7 +459,7 @@ def main():
     logger("Plotting...")
     mod_plot.mod_plot(outfn, data=data)
     # get bed-formatted output
-    mod_bed(data, o.outdir, o.minModFreq)
+    mod_bed(data, o.outdir, symbol2modbase, o.minModFreq)
     # plot pairwise plots - those will affect column names therefore has to be done at the end
     try:
         # skip pairplots if more than 4 samples
@@ -482,9 +472,6 @@ def main():
     except Exception as e:
         logger("[ERROR] Plotting scatterplots failed (%s).\n"%str(e))
 
-    # clean-up or message
-    if o.cleanup: os.system("rm -r %s/reads/"%o.outdir)
-    else: logger("You can remove reads directory: rm -r %s/reads/"%o.outdir)
     logger("All finished! Have a nice day :)")
 
 if __name__=='__main__': 

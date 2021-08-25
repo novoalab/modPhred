@@ -7,7 +7,7 @@ epilog="""Author: l.p.pryszcz+git@gmail.com
 Barcelona, 3/21/2020
 """
 
-import glob, gzip, os, pickle, pysam, sys, zlib
+import glob, gzip, os, pysam, sys, zlib
 from collections import Counter
 from datetime import datetime
 from multiprocessing import Pool
@@ -16,7 +16,7 @@ import matplotlib.patches as mpatches
 import numpy as np
 import pandas as pd
 import seaborn as sns
-from guppy_encode import HEADER, VERSION, logger, memory_usage, load_info, base2complement, MaxModsPerBase
+from guppy_encode import *
 from mod_report import is_qcfail, base2index, code2function
 from sklearn.decomposition import PCA
 #from scipy.cluster.hierarchy import dendrogram, linkage
@@ -146,18 +146,16 @@ def mod_cluster(infn, args, data=False, ext="png", logger=logger, read_strand_lu
     outdir = os.path.join(os.path.dirname(infn), "clusters")
     if not os.path.isdir(outdir):
         os.makedirs(outdir)
-    # load info
-    moddata = load_info(os.path.dirname(infn))
-    MaxPhredProb = moddata["MaxPhredProb"]
-    bamfiles = moddata["bam"]
+    # get bamfiles
+    bamfiles = glob.glob(os.path.join(os.path.dirname(infn), "minimap2", "*.bam"))
     bamfiles.sort()
-    # BAM > modifications
-    # get can2mods ie {'A': ['6mA'], 'C': ['5mC'], 'G': [], 'T': []}
-    can2mods = {b: [moddata["symbol2modbase"][m] for m in mods]
-                for b, mods in moddata["canonical2mods"].items()}
+    # load info
+    fnames, basecount, mods2count, md = get_mod_data(bamfiles[0])
+    alphabet, symbol2modbase, canonical2mods, base2positions = get_alphabet(md['base_mod_alphabet'], md['base_mod_long_names'])
+    MaxPhredProb = md["MaxPhredProb"]
+    # U>T patch for RNA mods
     if "U" in can2mods:
-        can2mods["T"] = can2mods["U"]#; print(can2mods)
-    #print(MaxPhredProb, can2mods, bamfiles)
+        can2mods["T"] = can2mods["U"]
     
     # parse data
     if isinstance(data, bool):

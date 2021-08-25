@@ -18,7 +18,7 @@ import matplotlib
 matplotlib.use('Agg') # Force matplotlib to not use any Xwindows backend
 import matplotlib.pyplot as plt
 import seaborn as sns
-from guppy_encode import VERSION, HEADER, load_info, logger
+from guppy_encode import *
 
 def get_positions_from_bed(fname):
     """Return list of modified positions"""

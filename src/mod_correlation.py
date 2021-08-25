@@ -7,7 +7,7 @@ epilog="""Author: l.p.pryszcz+git@gmail.com
 Barcelona, 3/02/2020
 """
 
-import glob, gzip, os, pickle, pysam, sys, zlib
+import glob, gzip, os, pysam, sys, zlib
 from collections import Counter
 from datetime import datetime
 from multiprocessing import Pool
@@ -15,7 +15,7 @@ from  matplotlib import pyplot as plt
 import numpy as np
 import pandas as pd
 import seaborn as sns
-from guppy_encode import HEADER, VERSION, logger, memory_usage, load_info, base2complement, MaxModsPerBase
+from guppy_encode import *
 from mod_report import is_qcfail, base2index, code2function
 
 complement = {"A": "T", "C": "G", "G": "C", "T": "A"}
@@ -200,16 +200,16 @@ def mod_correlation(infn, ext="png", logger=logger, data=False, overwrite=False,
     outdir = os.path.join(os.path.dirname(infn), "correlations")
     if not os.path.isdir(outdir):
         os.makedirs(outdir)
-    # load info
-    moddata = load_info(os.path.dirname(infn))
-    MaxPhredProb = moddata["MaxPhredProb"]
-    bamfiles = moddata["bam"]
+    # get bamfiles
+    bamfiles = glob.glob(os.path.join(os.path.dirname(infn), "minimap2", "*.bam"))
     bamfiles.sort()
-    # BAM > modifications
-    # get can2mods ie {'A': ['6mA'], 'C': ['5mC'], 'G': [], 'T': []}
-    can2mods = {b: [moddata["symbol2modbase"][m] for m in mods]
-                for b, mods in moddata["canonical2mods"].items()}#; print(can2mods)
-    #print(MaxPhredProb, can2mods, bamfiles)
+    # load info
+    fnames, basecount, mods2count, md = get_mod_data(bamfiles[0])
+    alphabet, symbol2modbase, canonical2mods, base2positions = get_alphabet(md['base_mod_alphabet'], md['base_mod_long_names'])
+    MaxPhredProb = md["MaxPhredProb"]
+    # U>T patch for RNA mods
+    if "U" in can2mods:
+        can2mods["T"] = can2mods["U"]
     
     # parse data
     if isinstance(data, bool):

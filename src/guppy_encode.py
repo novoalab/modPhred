@@ -12,175 +12,31 @@ TO DO:
 - store FastQ only if needed (~33% increase in speed)
 - merge guppy_encode & guppy_encode_live ie replacing minimap2 with mappy
 - add polyA tail estimation
+- SAM methylation encoding
 """
 epilog="""Author: l.p.pryszcz+git@gmail.com
 Barcelona, 20/06/2019
 """
 
-import glob, gzip, h5py, os, pickle, resource, sys, subprocess, time
-from datetime import datetime
-from multiprocessing import Pool
-from pathlib import Path
+import ast, glob, mappy, os, pysam, sys
 import numpy as np
+from collections import OrderedDict
+from datetime import datetime
+from multiprocessing import Pool # use pebble instead
+from pathlib import Path
+from basecall import init_args, start_guppy_server, get_basecall_client, basecall_and_align
+from common import *
 
-VERSION = '1.0b'
-# set max 3 modifications per each base
-MaxModsPerBase = 3
-MaxProb = 256
-QUALS = np.array(list(map(chr, range(33, 127)))) #"".join(map(chr, range(33, 127)))
-# it's only DNA as in SAM U should be A
-base2complement = {"A": "T", "T": "A", "C": "G", "G": "C", "N": "N"}
-
-HEADER = """###
-# Welcome to modPhred (ver. %s)!
-# 
-# Executed with: %s
-#
-# For each bam file 4 values are stored for every position:
-# - depth of coverage (only positions with >=%s X in at least one sample are reported)
-# - accuracy of basecalling (fraction of reads having same base as reference, ignoring indels)
-# - frequency of modification (fraction of reads with modification above given threshold)
-# - median modification probability of modified bases (0-1 scaled). 
-#
-# If you have any questions, suggestions or want to report bugs,
-# please use https://github.com/novoalab/modPhred/issues.
-# 
-# Let's begin the fun-time with Nanopore modifications...
-###
-chr\tpos\tref_base\tstrand\tmod\t%s
-"""
-
-# check if all executables exists & in correct versions
-def byte2str(e):
-    """Return str representation of byte object"""
-    return e.decode("utf-8")
-
-def _check_executable(cmd):
-    """Check if executable exists."""
-    p = subprocess.Popen("type " + cmd, shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-    return "".join(map(byte2str, p.stdout.readlines()))
-
-def _check_dependencies(dependencies):
-    """Return error if wrong software version"""
-    warning = 0
-    # check dependencies
-    info = "[WARNING] Old version of %s: %s. Update to version %s+!\n"
-    for cmd, version in dependencies.items():
-        out = _check_executable(cmd)
-        if "not found" in out: 
-            warning = 1
-            sys.stderr.write("[ERROR] %s\n"%out)
-        elif version:
-            p = subprocess.Popen([cmd, '--version'], stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-            out = byte2str(p.stdout.readlines()[0])
-            curver = out.split()[-1].split('-')[0] # 2.16-r922 for minimap2
-            try:
-                curver = float(curver)
-                if curver<version:
-                    warning = 1
-                    sys.stderr.write(info%(cmd, curver, version))
-            except:
-                warning = 1
-                sys.stderr.write("[WARNING] Problem checking %s version: %s\n"%(cmd, out))
-                
-    message = "Make sure you have installed all dependencies from https://github.com/lpryszcz/modPhred#prerequisites !"
-    if warning:
-        sys.stderr.write("\n%s\n\n"%message)
-        sys.exit(1)
-    
-dependencies = {'minimap2': 2.16, 'samtools': 1.3}
-#_check_dependencies(dependencies)
-
-def get_MaxPhredProb(MaxModsPerBase, QUALS=QUALS):
+def get_MaxPhredProb(canonical2mods, QUALS=QUALS, min_mods_per_base=3):
+    MaxModsPerBase = max(min_mods_per_base, max(map(len, canonical2mods.values())))
     MaxPhredProb = int(len(QUALS)/MaxModsPerBase)
     return MaxPhredProb
 
-def dump_info(indir, alphabet, symbol2modbase, canonical2mods, base2positions, fast5, fast5mod, 
-              MaxModsPerBase, MaxPhredProb, fn="modPhred.pkl"):
-    """Dump Fast5 info to pickle."""
-    data = {"version": VERSION,
-            "MaxModsPerBase": MaxModsPerBase,
-            "MaxProb": MaxProb,
-            "QUALS": QUALS,
-            "MaxPhredProb": MaxPhredProb,
-            "alphabet": alphabet,
-            "symbol2modbase": symbol2modbase,
-            "canonical2mods": canonical2mods,
-            "base2positions": base2positions,
-            "fast5": fast5,
-            "fast5mod": fast5mod, 
-            }
-    # dump using pickle
-    fname = os.path.join(indir, fn)
-    with open(fname, "wb") as out:
-        pickle.dump(data, out, protocol=pickle.HIGHEST_PROTOCOL)
-
-def load_info(indir, recursive=False, fn="modPhred.pkl"):
-    """Load and return Fast5 info from pickle. Return empty dict if no pickle"""
-    data = {} ## ADD RECURSIVE INDIR HANDLING HERE!!
-    fname = os.path.join(indir, fn)
-    if os.path.isfile(fname):
-        data = pickle.load(open(fname, "rb"))
-    return data
-
-def get_moltype(output_alphabet):
-    """Return moltype and underlying bases for given alphabet"""
-    if "T" in output_alphabet:
-        bases = "ACGT"
-        moltype = "DNA"
-    elif "U" in output_alphabet:
-        bases = "ACGU"
-        moltype = "RNA"
-    else:
-        logger("[ERROR] Cannot guess if Fast5 contains DNA or RNA (%s)!"%"".join(output_alphabet))
-        sys.exit(1)
-    return moltype, bases
-    
-def is_rna(indir):
-    """Return True if RNA sample"""
-    data = load_info(indir)
-    if "U" in data["alphabet"]:
-        return True
-    return False
-    
-def get_alphabet(output_alphabet, mods, canonical_bases="ACGTU", force_rna=0):
-    """Return correctly ordered alphabet of bases with modified bases
-    and 2 dictionaries: symbol2modbase & canonical2mods.
+def get_phredmodprobs(seq, modbaseprobNorm, mods2count, base2positions,
+                      canonical2mods, MaxPhredProb, a):
+    """Return PHRED scaled probability of given base being modified 
+    and mods2count dictionary
     """
-    mods = mods.split() # list of base_mod_long_names ie 6mA 5mC
-    output_alphabet = list(output_alphabet) # AYCZGT
-    # get ordered alphabet and dictionaries
-    symbol2modbase, canonical2mods = {}, {}
-    alphabet, _mods = [], []
-    # decide if DNA or RNA # ABCGH4TW
-    if force_rna: output_alphabet[output_alphabet.index("T")] = "U"
-    bases = "".join(b for b in output_alphabet if b in canonical_bases)
-    canonical2mods = {b: [] for b in bases}
-    idx = -1 
-    for b in output_alphabet:
-        alphabet.append(b)
-        if b in bases:
-            idx += 1
-        else:
-            if b.isdigit():
-                canonical2mods[bases[idx+1]].append(b)
-            else:
-                canonical2mods[bases[idx]].append(b)
-            symbol2modbase[b] = mods.pop(0)
-    # get base2positions
-    base2positions = {}
-    idx = 0
-    for b in bases:
-        base2positions[b] = [idx, ]
-        idx += 1
-        for mb in canonical2mods[b]:
-            base2positions[b].append(idx)
-            idx += 1
-    #print(bases, alphabet, symbol2modbase, canonical2mods, base2positions)
-    return alphabet, symbol2modbase, canonical2mods, base2positions
-
-def get_phredmodprobs(seq, modbaseprobNorm, mods2count, base2positions, canonical2mods, MaxPhredProb):
-    """Return PHRED scaled probability of given base being modified"""
     # prepare phred str as numpy array
     phredmodprobs = np.empty(len(seq), dtype='|S1')
     phredmodprobs[:] = QUALS[0]
@@ -199,204 +55,201 @@ def get_phredmodprobs(seq, modbaseprobNorm, mods2count, base2positions, canonica
         else:
             probs = modbaseprobNorm[ii, base2positions[b][1]] 
             indices = np.zeros(probs.shape[0], dtype='int')
-        # update PHRED - this takes ~46% of the function time
+        # update PHRED - this takes ~46% of the function time - can we do it faster?
         phredmodprobs[ii] = QUALS[probs+indices*MaxPhredProb]
         # calculate stats
+        # don't count supplementary alignments
+        if a.is_secondary or a.is_supplementary: continue        
         for idx in range(len(base2positions[b])-1):
             mods2count[canonical2mods[b][idx]] += np.sum(probs[indices==idx]>=0.5*MaxPhredProb)
     return phredmodprobs.tobytes().decode(), mods2count
 
-def get_latest_basecalling(h5, rname):
-    """Return latest basecalling from Fast5 file"""
-    basecalls = list(filter(lambda x: x.startswith("Basecall_1D_"), h5[rname]['Analyses'].keys()))
-    #print(h5[rname]['Analyses'].keys(), basecalls)
-    return basecalls[-1]
+def get_sam_header(ref, coord_sorted=False, version='1.6'):
+    """Return pysam.AlignmentHeader object as OderedDict
+    
+    If coord_sorted==True, then coordinate sorting is info is added
+    as the first element of the header.
+    """
+    faidx = pysam.FastaFile(ref)
+    h = OrderedDict()
+    # add version and sort info if needed
+    if coord_sorted: h["HD"] = {'VN': version, 'SO': 'coordinate'}
+    # add references
+    h.update(pysam.AlignmentHeader.from_references(faidx.references,
+                                                   faidx.lengths).as_dict())
+    return h
 
-def worker(args):
-    """mod_encode worker using data stored by guppy3"""
-    fn, ofn, basecall_group, MaxPhredProb = args
-    basecount = warns = 0
-    data, rname = [], ""
-    alphabet, symbol2modbase, canonical2mods, base2positions, mods2count = '', {}, {}, {}, {}
-    # open out file with gzip compression
-    outfn = ofn+".fastm.gz"
-    outfq = ofn+".fastq.gz_"
-    # The default mode is "rb", and the default compresslevel is 9.
-    out = gzip.open(outfn, "wt")
-    out2 = gzip.open(outfq, "wt")
-    # process entries in fast5
-    h5 = h5py.File(fn, 'r')
-    for i, rname in enumerate(h5):
+def get_mod_data(bam):
+    """Return modification data"""
+    sam = pysam.AlignmentFile(bam)
+    header_dict = sam.header.as_dict()
+    fnames = []
+    basecount = 0
+    for ri, rg_dict in enumerate(header_dict["RG"], 0):
+        fnames.append(rg_dict["ID"])
+        info = ast.literal_eval(rg_dict["DS"])
+        basecount += info["basecount"]
+        if not ri:
+            mods2count = info["mods2count"]
+        else:
+            for m, c in info["mods2count"].items():
+                mods2count[m] += c
+    return fnames, basecount, mods2count, info
+
+def encode_mods_in_bam(args):
+    """Basecall (or parse basecalled Fast5 file), align 
+    and encode modification probability in BAM as base qualities.
+    """
+    fn, bam, ref, rna, conf, oq_tag = args
+    mods2count, symbol2modbase = {}, {}
+    if os.path.isfile(bam):
+        # load info from BAM
+        fnames, basecount, mods2count, md = get_mod_data(bam)
+        alphabet, symbol2modbase, canonical2mods, base2positions = get_alphabet(md['base_mod_alphabet'], md['base_mod_long_names'])
+        return bam, basecount, mods2count, symbol2modbase
+    # get sample name
+    sample_name = os.path.basename(fn).split(".")[0]
+    i = basecount = 0
+    algs = []
+    # generate BAM header
+    header_dict = get_sam_header(ref, coord_sorted=True)
+    header = pysam.AlignmentHeader.from_dict(header_dict)
+    for a, sig, move, modbaseprob, md in basecall_and_align(fn, header, rna, conf):
         #if i>=100: break
-        # try to load base modification probabilities
-        try:                
-            if not basecall_group:
-                basecall_group = get_latest_basecalling(h5, rname)
-            modbaseprob = h5["%s/Analyses/%s/BaseCalled_template/ModBaseProbs"%(rname, basecall_group)]
-        except:
-            warning("[mod_encode][WARNING] Can't get base modification probabilities for %s:%s!"%(fn, rname))
-            warns += 1
-            break #continue
-        # prepare data storage if not already prepared
-        if not data:
-            data = [[] for i in range(modbaseprob.shape[1])]
-            mods = modbaseprob.attrs['modified_base_long_names'].decode()
-            output_alphabet = modbaseprob.attrs['output_alphabet'].tobytes().decode()
-            alphabet, symbol2modbase, canonical2mods, base2positions = get_alphabet(output_alphabet, mods)
-            rna = True if "U" in alphabet else False 
+        # get mod info
+        if not algs:
+            alphabet, symbol2modbase, canonical2mods, base2positions = get_alphabet(md['base_mod_alphabet'], md['base_mod_long_names'])
             mods2count = {m: 0 for mods in canonical2mods.values() for m in mods}
+            MaxPhredProb = get_MaxPhredProb(canonical2mods)
         # get mod probabilities and normalise to MaxPhredProb
-        modbaseprob = np.array(modbaseprob, dtype='float')
-        modbaseprobNorm = np.array(modbaseprob * MaxPhredProb / MaxProb, dtype='uint8')
-        # reverse only if RNA
+        #print(modbaseprob); break
+        modbaseprobNorm = (MaxPhredProb/MaxProb*modbaseprob).astype('uint8')
+        # get read sequence
+        seq = a.get_forward_sequence()
+        # and base probabilities matching the read sequence
         if rna: modbaseprobNorm = modbaseprobNorm[::-1]
-        # get read name and sequence as list
-        fastq = h5["%s/Analyses/%s/BaseCalled_template/Fastq"%(rname, basecall_group)]
-        # unload fastq entry from hdf5 as string, decode and split to list of individual lines
-        fastq_elements = fastq[()].tobytes().decode().split('\n')
-        read_name = fastq_elements[0].split()[0][1:]
-        seq = fastq_elements[1]
-        qual = fastq_elements[3]
-        basecount += len(seq)
+        '''# not needed since mappy2sam always returns soft-clipped algs
+        # trim hard-clipped bases from modbaseprobs
+        if a.is_reverse: 
+            se = a.cigar[0][1] if a.cigar[0][0]==5 else None
+            ss = a.cigar[-1][1] if a.cigar[-1][0]==5 else 0
+        else:
+            ss = a.cigar[0][1] if a.cigar[0][0]==5 else 0
+            se = a.cigar[-1][1] if a.cigar[-1][0]==5 else None
+        modbaseprobNorm = modbaseprobNorm[ss:se]
+        '''
+        # store original qualities
+        if oq_tag: a.set_tag(oq_tag, a.qual)
+        # store read group
+        a.set_tag("RG", sample_name)
         # get modprobs as qualities
-        phredmodprobs, mod2count = get_phredmodprobs(seq, modbaseprobNorm, mods2count, base2positions, canonical2mods, MaxPhredProb)
-        # store FastQ and FastM
-        ## those two take 33+37% of function time & out2 is needed only sometimes!
-        out2.write("@%s\n%s\n+\n%s\n"%(read_name, seq, qual))
-        out.write("@%s\n%s\n+\n%s\n"%(read_name, seq, phredmodprobs))
-    # report number of bases
-    if rname:
-        name = "/".join(fn.split("/")[-4:])
-    # if warnings skip file entirely
-    if warns:
-        return fn, 0, mods2count, alphabet, symbol2modbase, canonical2mods, base2positions
-    # mv only if finished
-    os.replace(ofn+".fastq.gz_", ofn+".fastq.gz")
-    return fn, basecount, mods2count, alphabet, symbol2modbase, canonical2mods, base2positions
+        phredmodprobs, mods2count = get_phredmodprobs(seq, modbaseprobNorm, mods2count, base2positions, canonical2mods, MaxPhredProb, a)
+        # orient them accordingly to read orientation
+        if a.is_reverse: phredmodprobs = phredmodprobs[::-1]
+        # and store
+        a.qual = phredmodprobs
+        algs.append(a)
+        # don't count supplementary alignments
+        if a.is_secondary or a.is_supplementary: continue
+        i += 1
+        basecount += len(seq)
+    # don't write BAM if nothing aligned
+    if not i: return bam, basecount, mods2count, symbol2modbase
+    # add basecount and modinfo to header
+    mod_data = {"MaxPhredProb": MaxPhredProb, "basecount": basecount,
+                "mods2count": mods2count, 
+                "base_mod_alphabet": md['base_mod_alphabet'], 
+                "base_mod_long_names": md['base_mod_long_names'], 
+                }
+    header_dict["RG"] = [{"ID": sample_name, "DS": str(mod_data)}]
+    # sort algs
+    algs = sorted(algs, key=lambda a: (a.reference_name, a.pos))
+    # and write in BAM
+    with pysam.AlignmentFile(bam, "wb", header=header_dict) as out:
+        for a in algs: out.write(a)
+    return bam, basecount, mods2count, symbol2modbase
 
-def get_output_fnames(fnames, indir, outdir):
-    """Return FastQ directory name and output names for FastQ files"""
-    ofnames = []
-    fqdir = os.path.join(outdir, "reads", os.path.basename(indir.rstrip(os.path.sep)))
+def get_intermediate_dir_and_files(fnames, indir, outdir):
+    """Return temp directory name and output names for intermediate BAM files"""
+    bams = []
+    tempdir = os.path.join(outdir, "minimap2", os.path.basename(indir.rstrip(os.path.sep)))
     for fn in fnames:
-        ofn = os.path.join(fqdir, fn[len(indir):].lstrip(os.path.sep))
-        ofnames.append(ofn)
+        bam = os.path.join(tempdir, fn[len(indir):].lstrip(os.path.sep)+".bam")
+        bams.append(bam)
         # create out directories for FastQ files
-        if not os.path.isdir(os.path.dirname(ofn)): os.makedirs(os.path.dirname(ofn))
-    return fqdir, ofnames
+        if not os.path.isdir(os.path.dirname(bam)): os.makedirs(os.path.dirname(bam))
+    return tempdir, bams
 
-def mod_encode(outdir, indirs, threads, basecall_group="", MaxModsPerBase=3, recursive=False):
+def mod_encode(outdir, indirs, fasta, threads, rna, config, host, port,
+               recursive, device, timeout, oq_tag):
     """Convert basecalled Fast5 into FastQ with base modification probabilities
     encoded as FastQ qualities.
     """
-    fastq_dirs = []
-    MaxPhredProb = get_MaxPhredProb(MaxModsPerBase)
     logger("Encoding modification info from %s directories...\n"%len(indirs))
+    # skip if BAM files exists - this can be done before anything else
+    # start guppy server if needed
+    conf = (config, host, port)
+    if host:
+        guppy_proc, host, port = start_guppy_server(host, config, port, device)
+        # try connecting to guppy server first
+        conf = (config, host, port)
+        client, _get_read_data = get_basecall_client(*conf)
+    else:
+        guppy_proc = None
+        logger("We'll use basecall information from Fast5 files...")
+    # load reference for mappy
+    logger("Loading reference index from %s..."%fasta)
+    aligner = mappy.Aligner(fasta, preset="spliced" if rna else "map-ont", k=13)
+    # start pool of workers
+    # it's important to initialise the pool with aligner object as it can't be pickled
+    p = Pool(threads, initializer=init_args, initargs=(aligner, )) #, maxtasksperchild=1)
+    bams = []
     for indir in indirs:
-        if recursive:
-            fnames = sorted(map(str, Path(indir).rglob('*.fast5')))
-        else:
-            fnames = sorted(map(str, Path(indir).glob('*.fast5')))
+        fnames = sorted(map(str, Path(indir).rglob('*.fast5') if recursive
+                            else Path(indir).glob('*.fast5')))
         logger(" %s with %s Fast5 file(s)...\n"%(indir, len(fnames)))
-        # no need to have more threads than input directories ;) 
-        if threads > len(fnames):
-            threads = len(fnames)
-        # define imap, either pool of processes or map
-        if threads>1:
-            p = Pool(threads, maxtasksperchild=1)
-            imap = p.imap_unordered 
-        else:
-            imap = map
-        # load current data - this may cause problems if recursion was done...
-        data = load_info(indir, recursive)
-        # exit if not fnames nor modPhred.pkl
-        if not fnames and not data:
-            warning("[mod_encode][WARNING] No Fast5 files and no previously process data in %s\n"%indir)
-            sys.exit(1)
-            continue
-        # get already processed files
-        fast5 = {}
-        if data: 
-            # start from the beginning if different MaxModsPerBase used
-            if data["MaxModsPerBase"] != MaxModsPerBase:
-                info = "[mod_encode][WARNING] Previously you used --MaxModsPerBase %s, while now %s. Recomputing FastQ files..."
-                warning(info%(data["MaxModsPerBase"], MaxModsPerBase))
-            else:
-                fast5 = data["fast5"]
-                logger("  %s were processed earlier."%len(fast5), add_memory=0)
         # process files if not already processed (FastQ not present or FastQ is older than Fast5)
-        fqdir, ofnames = get_output_fnames(fnames, indir, outdir)
-        fastq_dirs.append(fqdir)
-        args = [(fn, ofn, basecall_group, MaxPhredProb) for fn, ofn in zip(fnames, ofnames)
-                if not os.path.isfile(ofn+".fastq.gz")]
-        parser = imap(worker, args)
-        for ii, (fn, basecount, mods2count, alphabet, symbol2modbase, canonical2mods, base2positions) in enumerate(parser, 1):
+        tempdir, _bams = get_intermediate_dir_and_files(fnames, indir, outdir)
+        bam = tempdir + ".bam"
+        bams.append(bam)
+        if os.path.isfile(bam):
+            # load info from BAM
+            fnames, basecount, mods2count, md = get_mod_data(bam)#; print(md)
+            alphabet, symbol2modbase, canonical2mods, base2positions = get_alphabet(md['base_mod_alphabet'], md['base_mod_long_names'])
+            modcount = ", ".join(("{:,} {} [{:7,.3%}]".format(c, symbol2modbase[m], c/basecount)
+                                  for m, c in mods2count.items()))
+            logger("  {:,} bases, of those: {}   ".format(basecount, modcount), add_memory=0)
+            continue
+        # exit if not fnames and not BAM created
+        if not fnames:
+            logger("[mod_encode][WARNING] No Fast5 files and no previously process data in %s\n"%indir)
+            sys.exit(1)
+        # fn, bam, ref, rna, conf, oq_tag
+        args = [(fn, _bam, fasta, rna, conf, oq_tag) for fn, _bam in zip(fnames, _bams)]
+        _bams, basecount, mods2count = [], 0, {}
+        for ii, (_bam, _basecount, _mods2count, symbol2modbase) in enumerate(p.imap(encode_mods_in_bam, args), 1):
             # skip files without bases
-            if not basecount: continue
-            sys.stderr.write(" %s / %s  %s with %s bases. Detected mods: %s   \r"%(ii, len(args), os.path.basename(fn), basecount, str(mods2count)))
-            data = load_info(fqdir, recursive)
-            # store data
-            if data:
-                # either add new Fast5
-                fast5 = data["fast5"]
-                fast5[fn] = basecount
-                fast5mod = data["fast5mod"]
-                fast5mod[fn] = mods2count
-            else:
-                # or start pickle from scratch if doesn't exists
-                fast5 = {fn: basecount}
-                fast5mod = {fn: mods2count}
-                moltype, bases = get_moltype(alphabet)
-                nmods = sum(len(v) for k, v in canonical2mods.items())
-                info = "  %s alphabet with %s modification(s) %s. symbol2modbase: %s"
-                logger(info%(moltype, nmods, str(canonical2mods), str(symbol2modbase)), add_memory=0)
-                # make sure --MaxModsPerBase is sufficiently large
-                maxnmodsperbase = max(len(v) for k, v in canonical2mods.items())
-                if maxnmodsperbase>MaxModsPerBase:
-                    info = "[mod_encode][WARNING] Too many modifications per base (%s). \nPlease restart with --MaxModsPerBase %s or larger!"
-                    warning(info%(maxnmodsperbase, maxnmodsperbase))
-            # this keeps info on completed Fast5>FastQ this way
-            dump_info(fqdir, alphabet, symbol2modbase, canonical2mods, base2positions, fast5, fast5mod,
-                      MaxModsPerBase, MaxPhredProb)
-        # report total number of bases for project
-        data = load_info(fqdir, recursive)
-        symbol2modbase = data["symbol2modbase"]
-        totbases = sum(v for k, v in data["fast5"].items())
-        # get total number of modifications
-        mods2count = {}
-        if "fast5mod" in data:
-            for fn in data["fast5mod"]:
-                for k, v in data["fast5mod"][fn].items():
-                    if k not in mods2count: mods2count[k] = v
-                    else: mods2count[k] += v
-        modcount = ", ".join(("{:,} {} [{:7,.3%}]".format(c, symbol2modbase[m], c/totbases)
+            if not _basecount: continue
+            # update info
+            _bams.append(_bam)
+            basecount += _basecount
+            for m, c in _mods2count.items():
+                if m not in mods2count: mods2count[m] = c
+                else: mods2count[m] += c
+            sys.stderr.write(" %s / %s %s bases. Detected mods: %s   \r"%(ii, len(args), basecount, str(mods2count)))
+        # write sample stats
+        modcount = ", ".join(("{:,} {} [{:7,.3%}]".format(c, symbol2modbase[m], c/basecount)
                               for m, c in mods2count.items()))
-        logger("  {:,} bases saved in FastQ, of those: {}   ".format(totbases, modcount), add_memory=0)
-        # close pool
-        if threads>1: p.terminate()
-    return fastq_dirs
-
-def warning(info):
-    def count(i=0):
-        i+=1
-    logger(info, add_timestamp=0, add_memory=0)
-
-def memory_usage(childrenmem=True, div=1024.):
-    """Return memory usage in MB including children processes"""
-    mem = resource.getrusage(resource.RUSAGE_SELF).ru_maxrss / div
-    if childrenmem:
-        mem += resource.getrusage(resource.RUSAGE_CHILDREN).ru_maxrss / div
-    return mem
-        
-def logger(info, add_timestamp=1, add_memory=1, out=sys.stderr):
-    """Report nicely formatted stream to stderr"""
-    info = info.rstrip('\n')
-    memory = timestamp = ""
-    if add_timestamp:
-        timestamp = "[%s]"%str(datetime.now()).split(".")[0] #"[%s]"%datetime.ctime(datetime.now())
-    if add_memory:
-        memory = " [mem: %5.0f MB]"%memory_usage()
-    out.write("%s %s%s\n"%(timestamp, info, memory))
+        logger("  {:,} bases, of those: {}   ".format(basecount, modcount), add_memory=0)
+        # merge bam files
+        pysam.merge("--write-index", "-p", "-@ %s"%threads, bam, *_bams)
+        # and clean-up
+        os.system("rm -r %s"%tempdir)
+    # close pool
+    p.close()
+    # and guppy basecall server if it was started by this process
+    if guppy_proc: guppy_proc.terminate()
+    return bams
 
 def main():
     import argparse
@@ -409,16 +262,25 @@ def main():
     parser.add_argument("-i", "--indirs", nargs="+", help="input directory with Fast5 files")
     parser.add_argument("-o", "--outdir", default="modPhred", help="output directory [%(default)s]")
     parser.add_argument("-r", "--recursive", action='store_true', help="recursive processing of input directories [%(default)s]")
-    parser.add_argument("-t", "--threads", default=8, type=int, help="number of cores to use [%(default)s]")
-    parser.add_argument("--basecall_group",  default="", help="basecall group to use from Fast5 file [last basecalling]")
-    parser.add_argument("--MaxModsPerBase", default=MaxModsPerBase, type=int, help=argparse.SUPPRESS)
+    parser.add_argument("--rna", action='store_true', help="project is RNA sequencing [DNA]")
+    parser.add_argument("-f", "--fasta", required=1, help="reference FASTA file")
+    parser.add_argument("-t", "--threads", default=2, type=int, help="number of cores to use [%(default)s]")
+    parser.add_argument("--tag", default="", help="SAM tag to store original qualities ie. OQ [skipped]")
+    guppy = parser.add_argument_group("Basecalling options")
+    guppy.add_argument("-c", "--config", default="dna_r9.4.1_450bps_modbases_dam-dcm-cpg_hac.cfg", help="guppy model [%(default)s]")
+    guppy.add_argument("--host", "--guppy_basecall_server", default="",
+                        help="guppy server hostname or path to guppy_basecall_server binary [use basecall information from Fast5]")
+    guppy.add_argument("--port", default=5555, type=int,
+                        help="guppy server port (this is ignored if binary is provided) [%(default)s]")
+    guppy.add_argument("--device", default="cuda:0", help="CUDA device to use [%(default)s]")
+    guppy.add_argument("--timeout", default=10*60, help="timeout in seconds to process each Fast5 file [%(default)s]")
 
     o = parser.parse_args()
     if o.verbose: 
         sys.stderr.write("Options: %s\n"%str(o))
 
-    #sys.stderr.write("Processing %s directories...\n"%len(o.indirs))
-    mod_encode(o.outdir, o.indirs, o.threads, o.basecall_group, o.MaxModsPerBase, o.recursive)
+    mod_encode(o.outdir, o.indirs, o.fasta, o.threads, o.rna, o.config, o.host, o.port,
+               o.recursive, o.device, o.timeout, o.tag)
 
 if __name__=='__main__': 
     t0 = datetime.now()
