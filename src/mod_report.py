@@ -438,6 +438,8 @@ def main():
         
     # load info
     fnames, basecount, mods2count, md = get_mod_data(bamfiles[0])
+    #print(bamfiles[0], md, md['base_mod_alphabet'], md['base_mod_long_names'])
+    alphabet, symbol2modbase, canonical2mods, base2positions = get_alphabet(md['base_mod_alphabet'], md['base_mod_long_names'])
     MaxPhredProb = md["MaxPhredProb"]
     can2mods = get_can2mods(md)
     

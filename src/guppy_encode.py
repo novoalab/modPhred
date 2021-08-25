@@ -87,7 +87,7 @@ def get_mod_data(bam):
     basecount = 0
     for ri, rg_dict in enumerate(header_dict["RG"], 0):
         fnames.append(rg_dict["ID"])
-        info = ast.literal_eval(rg_dict["DS"])
+        info = ast.literal_eval(rg_dict["DS"])#; print(info)
         basecount += info["basecount"]
         if not ri:
             mods2count = info["mods2count"]
