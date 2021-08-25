@@ -382,6 +382,16 @@ def mod_bed(data, outdir, symbol2modbase, minModFreq=0.1):
                           r.pos-1, r.pos, get_rgb(mod2color[r["mod"]], freq), depth, round(100*freq)))
     out.close()
     
+def get_can2mods(md):
+    """Return can2mods"""
+    alphabet, symbol2modbase, canonical2mods, base2positions = get_alphabet(md['base_mod_alphabet'], md['base_mod_long_names'])
+    # get can2mods ie {'A': ['6mA'], 'C': ['5mC'], 'G': [], 'T': []}
+    can2mods = {b: [symbol2modbase[m] for m in mods]
+                for b, mods in canonical2mods.items()}
+    # U>T patch for RNA mods
+    if "U" in can2mods: can2mods["T"] = can2mods["U"]
+    return can2mods
+    
 def main():
     import argparse
     usage   = "%(prog)s -v" #usage=usage, 
@@ -428,19 +438,13 @@ def main():
         
     # load info
     fnames, basecount, mods2count, md = get_mod_data(bamfiles[0])
-    alphabet, symbol2modbase, canonical2mods, base2positions = get_alphabet(md['base_mod_alphabet'], md['base_mod_long_names'])
     MaxPhredProb = md["MaxPhredProb"]
-    # U>T patch for RNA mods
-    if "U" in can2mods:
-        can2mods["T"] = can2mods["U"]
+    can2mods = get_can2mods(md)
     
     # process everything only if outfile does not exists
     outfn = os.path.join(o.outdir, "mod.gz")
     if not os.path.isfile(outfn):
         # BAM > modifications
-        # get can2mods ie {'A': ['6mA'], 'C': ['5mC'], 'G': [], 'T': []}
-        can2mods = {b: [symbol2modbase[m] for m in mods]
-                    for b, mods in canonical2mods.items()}
         # the index is already created by mod_encode, but let's keep it
         logger("Indexing BAM file(s)...")
         for fn in bamfiles:

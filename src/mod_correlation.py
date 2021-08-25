@@ -205,13 +205,9 @@ def mod_correlation(infn, ext="png", logger=logger, data=False, overwrite=False,
     bamfiles.sort()
     # load info
     fnames, basecount, mods2count, md = get_mod_data(bamfiles[0])
-    alphabet, symbol2modbase, canonical2mods, base2positions = get_alphabet(md['base_mod_alphabet'], md['base_mod_long_names'])
     MaxPhredProb = md["MaxPhredProb"]
-    # U>T patch for RNA mods
-    if "U" in can2mods:
-        can2mods["T"] = can2mods["U"]
-    
-    # parse data
+    can2mods = get_can2mods(md)
+     # parse data
     if isinstance(data, bool):
         logger("Loading %s ...\n"%infn)
         data = pd.read_csv(infn, sep="\t", header=len(HEADER.split('\n'))-2, index_col=False,
