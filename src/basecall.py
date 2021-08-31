@@ -6,6 +6,7 @@ from pyguppyclient import GuppyClientBase, yield_reads
 from pyguppyclient.ipc import SimpleRequestType, SimpleReplyType
 from common import logger
 from mapping import mappy, mappy2sam
+from collections import OrderedDict
 
 def init_args(*args):
     """Share globals with pool of workers. 
@@ -15,6 +16,21 @@ def init_args(*args):
     """
     global aligner
     aligner, = args
+
+def get_sam_header(ref, coord_sorted=False, version='1.6'):
+    """Return pysam.AlignmentHeader object as OderedDict
+    
+    If coord_sorted==True, then coordinate sorting is info is added
+    as the first element of the header.
+    """
+    faidx = pysam.FastaFile(ref)
+    h = OrderedDict()
+    # add version and sort info if needed
+    if coord_sorted: h["HD"] = {'VN': version, 'SO': 'coordinate'}
+    # add references
+    h.update(pysam.AlignmentHeader.from_references(faidx.references,
+                                                   faidx.lengths).as_dict())
+    return h
 
 def basecall_and_align(fn, header, rna, conf, MD=False, only_signal=False):
     """Basecall reads from Fast5 file, encode modifications, align to reference and yield
@@ -83,8 +99,8 @@ def get_read_data(fn, only_signal=False):
             md = {'trimmed_samples': seg['first_sample_template'],
                   'model_stride': bc_summary['block_stride'],
                   'mean_qscore': bc_summary['mean_qscore'],
-                  #'daq_offset': channel_info['offset'],
-                  #'daq_scaling': channel_info['range']/channel_info['digitisation'],
+                  'daq_offset': channel_info['offset'],
+                  'daq_scaling': channel_info['range']/channel_info['digitisation'],
                   'base_mod_long_names': mod_summary['modified_base_long_names'].split(), #'6mA 5mC'
                   'base_mod_alphabet': mod_summary['output_alphabet'], #'AYCZGT'
                   }
@@ -205,9 +221,15 @@ def _get_read_data_v006(client):
         md = {'trimmed_samples': called.trimmed_samples,
               'model_stride': called.model_stride,
               'mean_qscore' : called.qscore,
+              'daq_offset': read.daq_offset, 
+              'daq_scaling': read.daq_scaling,
+              #'median': called.scaling["median"], 
+              #'med_abs_dev': called.scaling["med_abs_dev"], 
               'base_mod_alphabet': called.mod_alphabet, # 'AYCZGT'
               'base_mod_long_names': called.mod_long_names, # ['6mA', '5mC']
               }
+        # add scaling info
+        md.update(called.scaling)
         yield read_id, seq, qseq, move, modbaseprobs, md
 
 def __get_data_from_basecalled_read(read):

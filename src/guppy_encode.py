@@ -1,18 +1,20 @@
 #!/usr/bin/env python3
-desc="""Convert basecalled Fast5 with modifications annotated by guppy v3.1.5+
-to FastQ with modification probabilities encoded as FastQ qualities.
+desc="""Basecall Fast5 (or read basecalled Fast5) with modifications, align & 
+save BAM with modification probabilities encoded as FastQ qualities.
+
+--rna will: 
+- automatically enable spliced alignments 
+- and estimates of polyA length [tag a1, a2, a3, a4] using polyA, polyA_flt, mean_flt and median.
 
 More info at: https://github.com/lpryszcz/modPhred
-
-Dependencies: h5py
 
 TO DO:
 - drop low quality reads
 - ignore low quality bases
-- store FastQ only if needed (~33% increase in speed)
-- merge guppy_encode & guppy_encode_live ie replacing minimap2 with mappy
-- add polyA tail estimation
 - SAM methylation encoding
+- use pebble instead of Pool with exception handling
+- make v1.1 backward compatible
+- how is viterbi over state_data from megalodon differ from modbaseprob?
 """
 epilog="""Author: l.p.pryszcz+git@gmail.com
 Barcelona, 20/06/2019
@@ -20,11 +22,11 @@ Barcelona, 20/06/2019
 
 import ast, glob, mappy, os, pysam, sys
 import numpy as np
-from collections import OrderedDict
 from datetime import datetime
 from multiprocessing import Pool # use pebble instead
 from pathlib import Path
-from basecall import init_args, start_guppy_server, get_basecall_client, basecall_and_align
+from basecall import init_args, start_guppy_server, get_basecall_client, basecall_and_align, get_sam_header
+from get_polyA import get_polyA_len, methods
 from common import *
 
 def get_MaxPhredProb(canonical2mods, QUALS=QUALS, min_mods_per_base=3):
@@ -64,21 +66,6 @@ def get_phredmodprobs(seq, modbaseprobNorm, mods2count, base2positions,
             mods2count[canonical2mods[b][idx]] += np.sum(probs[indices==idx]>=0.5*MaxPhredProb)
     return phredmodprobs.tobytes().decode(), mods2count
 
-def get_sam_header(ref, coord_sorted=False, version='1.6'):
-    """Return pysam.AlignmentHeader object as OderedDict
-    
-    If coord_sorted==True, then coordinate sorting is info is added
-    as the first element of the header.
-    """
-    faidx = pysam.FastaFile(ref)
-    h = OrderedDict()
-    # add version and sort info if needed
-    if coord_sorted: h["HD"] = {'VN': version, 'SO': 'coordinate'}
-    # add references
-    h.update(pysam.AlignmentHeader.from_references(faidx.references,
-                                                   faidx.lengths).as_dict())
-    return h
-
 def get_mod_data(bam):
     """Return modification data"""
     sam = pysam.AlignmentFile(bam)
@@ -103,6 +90,8 @@ def encode_mods_in_bam(args):
     fn, bam, ref, rna, conf, oq_tag = args
     mods2count, symbol2modbase = {}, {}
     if os.path.isfile(bam):
+        # disable pysam verbosity https://github.com/pysam-developers/pysam/issues/939#issuecomment-669016051
+        #pysam.set_verbosity(pysam.set_verbosity(0))        
         # load info from BAM
         fnames, basecount, mods2count, md = get_mod_data(bam)
         alphabet, symbol2modbase, canonical2mods, base2positions = get_alphabet(md['base_mod_alphabet'], md['base_mod_long_names'])
@@ -111,6 +100,7 @@ def encode_mods_in_bam(args):
     sample_name = os.path.basename(fn).split(".")[0]
     i = basecount = 0
     algs = []
+    flt, polyA_est = "FAIL", [0]*len(methods)
     # generate BAM header
     header_dict = get_sam_header(ref, coord_sorted=True)
     header = pysam.AlignmentHeader.from_dict(header_dict)
@@ -146,13 +136,23 @@ def encode_mods_in_bam(args):
         phredmodprobs, mods2count = get_phredmodprobs(seq, modbaseprobNorm, mods2count, base2positions, canonical2mods, MaxPhredProb, a)
         # orient them accordingly to read orientation
         if a.is_reverse: phredmodprobs = phredmodprobs[::-1]
-        # and store
         a.qual = phredmodprobs
-        algs.append(a)
         # don't count supplementary alignments
-        if a.is_secondary or a.is_supplementary: continue
-        i += 1
-        basecount += len(seq)
+        if not a.is_secondary and not a.is_supplementary: 
+            i += 1
+            basecount += len(seq)
+            if rna:
+                # get polyA tail
+                flt, polyA_est = get_polyA_len(a, sig, move, md, rna)
+                # and store
+                a.set_tag("af", flt, "Z")
+                for ei, e in enumerate(polyA_est, 1): a.set_tag("a%s"%ei, e, "f")
+        # for supplementary and secondary algs store primary alg polyA tail
+        elif rna: 
+            a.set_tag("af", flt, "Z")
+            for ei, e in enumerate(polyA_est, 1): a.set_tag("a%s"%ei, e, "f")
+        # and store
+        algs.append(a)
     # don't write BAM if nothing aligned
     if not i: return bam, basecount, mods2count, symbol2modbase
     # add basecount and modinfo to header
@@ -162,8 +162,8 @@ def encode_mods_in_bam(args):
                 "base_mod_long_names": md['base_mod_long_names'], 
                 }
     header_dict["RG"] = [{"ID": sample_name, "DS": str(mod_data)}]
-    # sort algs
-    algs = sorted(algs, key=lambda a: (a.reference_name, a.pos))
+    # sort algs - has to be sorted accordingly to order in reference FastA file
+    algs = sorted(algs, key=lambda a: (a.reference_id, a.pos))
     # and write in BAM
     with pysam.AlignmentFile(bam, "wb", header=header_dict) as out:
         for a in algs: out.write(a)

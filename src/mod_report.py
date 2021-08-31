@@ -3,10 +3,11 @@ desc="""Report positions likely being modified from mapped reads
 with modification probabilities encoded as base qualities. 
 
 The pipeline is performed in following steps:
-- mod_encode.py: encodes modifications probabilities from Fast5 as base qualities in FastQ
-- mod_align.py: aligns reads from FastQ files to reference and stores BAM files for each sample
+- mod_encode.py: basells Fast5, align and encode modifications probabilities as base qualities in BAM
 - mod_report.py: reports modified sites from BAM files that fulfil given filtering criteria
 - mod_plot.py: performs QC and plotting
+
+Dependencies: numpy mappy pandas pysam seaborn pyguppyclient (matching guppy version)
 
 More info at: https://github.com/lpryszcz/modPhred
 """
@@ -438,7 +439,6 @@ def main():
         
     # load info
     fnames, basecount, mods2count, md = get_mod_data(bamfiles[0])
-    #print(bamfiles[0], md, md['base_mod_alphabet'], md['base_mod_long_names'])
     alphabet, symbol2modbase, canonical2mods, base2positions = get_alphabet(md['base_mod_alphabet'], md['base_mod_long_names'])
     MaxPhredProb = md["MaxPhredProb"]
     can2mods = get_can2mods(md)
