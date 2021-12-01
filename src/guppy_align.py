@@ -29,7 +29,7 @@ def run_minimap2(ref, fastq, outfn, threads=1, storeQuals=False, spliced=1,
     """Run minimap2 and sort bam on-the-fly"""
     mode = ["-axmap-ont", ]
     if spliced:
-        mode = ["-axsplice", ] #-uf 
+        mode = ["-axsplice", "-k13"] #-uf 
     # -k7 -w5 -m20 -A3 -B1 - very sensitive alignment
     args1 = ["minimap2", "-t%s"%threads, ref] + fastq + mode
     if sensitive:
