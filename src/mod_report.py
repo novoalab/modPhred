@@ -235,7 +235,7 @@ def worker(args):
 def get_coverage(args):
     """Return array of coverage for given chromosome for given BAM."""
     bam, ref, mapq = args
-    sam = pysam.Samfile(bam)
+    sam = pysam.AlignmentFile(bam)
     ref2len = {r: l for r, l in zip(sam.references, sam.lengths)}
     coverage = np.zeros(ref2len[ref], dtype='uint16')
     for a in sam.fetch(reference=ref):
@@ -260,14 +260,20 @@ def get_covered_regions_per_bam(bams, threads=4, mapq=15, mincov=1, verbose=1, c
     """Return chromosome regions covered by at least mincov."""
     regions = []
     p = Pool(threads)
-    sam = pysam.Samfile(bams[0])
-    references, lengths = sam.references, sam.lengths
-    for ref, length in zip(references, lengths):
+    sams = [pysam.AlignmentFile(b) for b in bams]
+    sam = sams[0]
+    ref2len = {r: l for r, l in zip(sam.references, sam.lengths)}
+    ref2algs = [{s.contig: s.mapped for s in sam.get_index_statistics()} # if s.mapped
+                for sam in sams]
+    # get references with enough alignments
+    refs = [r for r in ref2len if max([d[r] for d in ref2algs if r in d])>=mincov]
+    for ri, ref in enumerate(refs, 1):
         if chrs and ref not in chrs:
             if verbose:
                 sys.stderr.write(" skipped %s\n"%ref)
             continue
-        coverage = np.zeros(length, dtype='uint16')
+        sys.stderr.write(" %s / %s  %s  \r"%(ri, len(refs), ref))
+        coverage = np.zeros(ref2len[ref], dtype='uint16')
         for _coverage in p.imap_unordered(get_coverage, [(bam, ref, mapq) for bam in bams]):
             coverage = np.max([coverage, _coverage], axis=0)
         # get regions with coverage
