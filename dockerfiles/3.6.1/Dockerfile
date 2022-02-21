@@ -21,7 +21,7 @@ RUN wget -q https://repo.anaconda.com/miniconda/Miniconda3-latest-Linux-x86_64.s
 
 # dependencies
 RUN . ~/.bashrc && \
-    conda install -y minimap2 samtools hdf5 && \
+    conda install -y minimap2 samtools hdf5 cython && \
     pip install h5py matplotlib pysam pandas seaborn
 
 # version-specific dependencies

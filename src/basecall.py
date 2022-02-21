@@ -95,7 +95,7 @@ def get_read_data(fn, only_signal=False):
             seggrp = read.get_latest_analysis("Segmentation")
             seg = read.get_analysis_attributes("%s/Summary/segmentation"%seggrp)
             mod_summary = read.get_analysis_attributes("%s/BaseCalled_template/ModBaseProbs"%bcgrp)
-            #channel_info = read.get_channel_info()
+            channel_info = read.get_channel_info()
             md = {'trimmed_samples': seg['first_sample_template'],
                   'model_stride': bc_summary['block_stride'],
                   'mean_qscore': bc_summary['mean_qscore'],

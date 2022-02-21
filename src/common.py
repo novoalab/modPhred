@@ -73,7 +73,7 @@ def get_alphabet(output_alphabet, mods, canonical_bases="ACGTU", force_rna=0):
     """Return correctly ordered alphabet of bases with modified bases
     and 2 dictionaries: symbol2modbase & canonical2mods.
     """
-    if mods is str: mods = mods.split() # list of base_mod_long_names ie 6mA 5mC
+    if isinstance(mods, str): mods = mods.split() # list of base_mod_long_names ie 6mA 5mC
     else: mods = mods[:]
     output_alphabet = list(output_alphabet) # AYCZGT
     # get ordered alphabet and dictionaries

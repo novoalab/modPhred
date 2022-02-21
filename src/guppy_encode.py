@@ -12,22 +12,23 @@ TO DO:
 - drop low quality reads
 - ignore low quality bases
 - SAM methylation encoding
-- use pebble instead of Pool with exception handling
 - make v1.1 backward compatible
-- how is viterbi over state_data from megalodon differ from modbaseprob?
 """
 epilog="""Author: l.p.pryszcz+git@gmail.com
 Barcelona, 20/06/2019
 """
 
-import ast, glob, mappy, os, pysam, sys
+import ast, glob, mappy, os, pysam, sys, traceback
 import numpy as np
 from datetime import datetime
-from multiprocessing import Pool # use pebble instead
+from pebble import ProcessPool, ProcessExpired
 from pathlib import Path
 from basecall import init_args, start_guppy_server, get_basecall_client, basecall_and_align, get_sam_header
 from get_polyA import get_polyA_len, methods
 from common import *
+
+import warnings
+warnings.simplefilter('ignore') # ignore warnings, mostly about pysam
 
 def get_MaxPhredProb(canonical2mods, QUALS=QUALS, min_mods_per_base=3):
     MaxModsPerBase = max(min_mods_per_base, max(map(len, canonical2mods.values())))
@@ -180,8 +181,27 @@ def get_intermediate_dir_and_files(fnames, indir, outdir):
         if not os.path.isdir(os.path.dirname(bam)): os.makedirs(os.path.dirname(bam))
     return tempdir, bams
 
-def mod_encode(outdir, indirs, fasta, threads, rna, config, host, port,
-               recursive, device, timeout, oq_tag):
+def yield_results_from_pool(future, args):
+    """Generator of results from pool of workers catching errors and time-outs."""
+    iterator = future.result()
+    i = 0
+    while True:
+        try:
+            yield next(iterator)
+        except StopIteration:
+            break
+        except TimeoutError as error:
+            logger("worker took longer than %d seconds for %s "%(error.args[1], args[i]))
+        except ProcessExpired as error:
+            logger("%s. Exit code: %d for %s "%(error, error.exitcode, args[i]))
+        except Exception as error:
+            logger("worker raised %s for %s "%(error, args[i]))
+            # this causes AttributeError: 'TypeError' object has no attribute 'traceback' in Python v3.7.9
+            logger(traceback.format_exc())#error.traceback)  # Python's traceback of remote process
+        i += 1
+
+def mod_encode(outdir, indirs, fasta, threads, rna, sensitive,
+               config, host, port, recursive, device, timeout, oq_tag):
     """Convert basecalled Fast5 into FastQ with base modification probabilities
     encoded as FastQ qualities.
     """
@@ -199,10 +219,16 @@ def mod_encode(outdir, indirs, fasta, threads, rna, config, host, port,
         logger("We'll use basecall information from Fast5 files...")
     # load reference for mappy
     logger("Loading reference index from %s..."%fasta)
-    aligner = mappy.Aligner(fasta, preset="spliced" if rna else "map-ont", k=13)
+    if sensitive:
+        kwargs = {"k": 6, "w": 3, #"u": "f", 
+                  "min_cnt": 1, "min_chain_score": 13, "min_dp_score": 20, 
+                  "scoring": [1, 1, 1, 1]}
+    else:
+        kwargs = {"preset": "spliced" if rna else "map-ont", "k": 13}
+    aligner = mappy.Aligner(fasta, **kwargs)
     # start pool of workers
     # it's important to initialise the pool with aligner object as it can't be pickled
-    p = Pool(threads, initializer=init_args, initargs=(aligner, )) #, maxtasksperchild=1)
+    p = ProcessPool(max_workers=threads, initializer=init_args, initargs=(aligner, )) #, max_tasks=10)
     bams = []
     for indir in indirs:
         fnames = sorted(map(str, Path(indir).rglob('*.fast5') if recursive
@@ -227,7 +253,8 @@ def mod_encode(outdir, indirs, fasta, threads, rna, config, host, port,
         # fn, bam, ref, rna, conf, oq_tag
         args = [(fn, _bam, fasta, rna, conf, oq_tag) for fn, _bam in zip(fnames, _bams)]
         _bams, basecount, mods2count = [], 0, {}
-        for ii, (_bam, _basecount, _mods2count, symbol2modbase) in enumerate(p.imap(encode_mods_in_bam, args), 1):
+        future = p.map(encode_mods_in_bam, args, timeout=timeout)
+        for ii, (_bam, _basecount, _mods2count, symbol2modbase) in enumerate(yield_results_from_pool(future, fnames), 1):
             # skip files without bases
             if not _basecount: continue
             # update info
@@ -238,11 +265,14 @@ def mod_encode(outdir, indirs, fasta, threads, rna, config, host, port,
                 else: mods2count[m] += c
             sys.stderr.write(" %s / %s %s bases. Detected mods: %s   \r"%(ii, len(args), basecount, str(mods2count)))
         # write sample stats
-        modcount = ", ".join(("{:,} {} [{:7,.3%}]".format(c, symbol2modbase[m], c/basecount)
-                              for m, c in mods2count.items()))
-        logger("  {:,} bases, of those: {}   ".format(basecount, modcount), add_memory=0)
+        if basecount:
+            modcount = ", ".join(("{:,} {} [{:7,.3%}]".format(c, symbol2modbase[m], c/basecount)
+                                  for m, c in mods2count.items()))
+            logger("  {:,} bases, of those: {}   ".format(basecount, modcount), add_memory=0)
         # merge bam files
         pysam.merge("--write-index", "-p", "-@ %s"%threads, bam, *_bams)
+        # make sure index has later mtime than bam
+        Path(bam+".csi").touch()
         # and clean-up
         os.system("rm -r %s"%tempdir)
     # close pool
@@ -263,6 +293,7 @@ def main():
     parser.add_argument("-o", "--outdir", default="modPhred", help="output directory [%(default)s]")
     parser.add_argument("-r", "--recursive", action='store_true', help="recursive processing of input directories [%(default)s]")
     parser.add_argument("--rna", action='store_true', help="project is RNA sequencing [DNA]")
+    parser.add_argument("--sensitive", action='store_true', help="use sensitive mapping parameters ie tRNA")
     parser.add_argument("-f", "--fasta", required=1, help="reference FASTA file")
     parser.add_argument("-t", "--threads", default=2, type=int, help="number of cores to use [%(default)s]")
     parser.add_argument("--tag", default="", help="SAM tag to store original qualities ie. OQ [skipped]")
@@ -273,14 +304,14 @@ def main():
     guppy.add_argument("--port", default=5555, type=int,
                         help="guppy server port (this is ignored if binary is provided) [%(default)s]")
     guppy.add_argument("--device", default="cuda:0", help="CUDA device to use [%(default)s]")
-    guppy.add_argument("--timeout", default=10*60, help="timeout in seconds to process each Fast5 file [%(default)s]")
+    guppy.add_argument("--timeout", default=20*60, type=int, help="timeout in seconds to process each Fast5 file [%(default)s]")
 
     o = parser.parse_args()
     if o.verbose: 
         sys.stderr.write("Options: %s\n"%str(o))
 
-    mod_encode(o.outdir, o.indirs, o.fasta, o.threads, o.rna, o.config, o.host, o.port,
-               o.recursive, o.device, o.timeout, o.tag)
+    mod_encode(o.outdir, o.indirs, o.fasta, o.threads, o.rna, o.sensitive, 
+               o.config, o.host, o.port, o.recursive, o.device, o.timeout, o.tag)
 
 if __name__=='__main__': 
     t0 = datetime.now()

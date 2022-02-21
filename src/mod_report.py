@@ -404,6 +404,7 @@ def main():
     parser.add_argument("-i", "--indirs", nargs="+", help="input directories with Fast5 files")
     parser.add_argument("-r", "--recursive", action='store_true', help="recursive processing of input directories [%(default)s]")
     parser.add_argument("--rna", action='store_true', help="project is RNA sequencing [DNA]")
+    parser.add_argument("--sensitive", action='store_true', help="use sensitive mapping parameters ie tRNA")
     parser.add_argument("-o", "--outdir", default="modPhred", help="output directory [%(default)s]")
     parser.add_argument("-f", "--fasta", required=1, type=argparse.FileType('r'), help="reference FASTA file")
     parser.add_argument("-m", "--mapq", default=15, type=int, help="min mapping quality [%(default)s]")
@@ -420,7 +421,7 @@ def main():
     guppy.add_argument("--port", default=5555, type=int,
                         help="guppy server port (this is ignored if binary is provided) [%(default)s]")
     guppy.add_argument("--device", default="cuda:0", help="CUDA device to use (works only if --host guppy_basecall_server_path) [%(default)s]")
-    guppy.add_argument("--timeout", default=10*60, help="timeout in seconds to process each Fast5 file [%(default)s]")
+    guppy.add_argument("--timeout", default=20*60, type=int, help="timeout in seconds to process each Fast5 file [%(default)s]")
     
     o = parser.parse_args()
     if o.verbose:
@@ -433,9 +434,8 @@ def main():
         logger("Output directory exits. Steps completed previously will be skipped!")
     
     # encode modifications in BAM
-    bamfiles = mod_encode(o.outdir, o.indirs, o.fasta, o.threads, o.rna,
-                          o.config, o.host, o.port,
-                          o.recursive, o.device, o.timeout, o.tag)
+    bamfiles = mod_encode(o.outdir, o.indirs, o.fasta, o.threads, o.rna, o.sensitive, 
+                          o.config, o.host, o.port, o.recursive, o.device, o.timeout, o.tag)
         
     # load info
     fnames, basecount, mods2count, md = get_mod_data(bamfiles[0])

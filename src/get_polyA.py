@@ -8,14 +8,13 @@ Barcelona, 26/08/2021
 import csv, gzip, inspect, mappy, numpy as np, os, pysam, sys, tempfile
 from datetime import datetime
 from pathlib import Path
-#from scipy.signal import savgol_filter, find_peaks
 from multiprocessing import Pool
 from basecall import init_args, start_guppy_server, get_basecall_client, basecall_and_align, get_sam_header
-#from resquiggle import resquiggle_reads
 from common import VERSION, logger
 import numba
 
-old_settings = np.seterr(divide='ignore') #under='ignore')
+import warnings
+warnings.simplefilter('ignore')
 
 def get_consecutive(data, stepsize=1):
     """Return consecutive windows allowing given max. step size"""
