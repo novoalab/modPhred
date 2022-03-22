@@ -61,15 +61,18 @@ def get_phredmodprobs(seq, modbaseprobNorm, mods2count, base2positions,
         # update PHRED - this takes ~46% of the function time - can we do it faster?
         phredmodprobs[ii] = QUALS[probs+indices*MaxPhredProb]
         # calculate stats
-        # don't count supplementary alignments
-        if a.is_secondary or a.is_supplementary: continue        
+        # don't count secondary alignments
+        if a.is_secondary: continue        
         for idx in range(len(base2positions[b])-1):
             mods2count[canonical2mods[b][idx]] += np.sum(probs[indices==idx]>=0.5*MaxPhredProb)
     return phredmodprobs.tobytes().decode(), mods2count
 
 def get_mod_data(bam):
     """Return modification data"""
+    # disable pysam verbosity https://github.com/pysam-developers/pysam/issues/939#issuecomment-669016051
+    save = pysam.set_verbosity(0)
     sam = pysam.AlignmentFile(bam)
+    pysam.set_verbosity(save)
     header_dict = sam.header.as_dict()
     fnames = []
     basecount = 0
@@ -91,8 +94,6 @@ def encode_mods_in_bam(args):
     fn, bam, ref, rna, conf, oq_tag = args
     mods2count, symbol2modbase = {}, {}
     if os.path.isfile(bam):
-        # disable pysam verbosity https://github.com/pysam-developers/pysam/issues/939#issuecomment-669016051
-        #pysam.set_verbosity(pysam.set_verbosity(0))        
         # load info from BAM
         fnames, basecount, mods2count, md = get_mod_data(bam)
         alphabet, symbol2modbase, canonical2mods, base2positions = get_alphabet(md['base_mod_alphabet'], md['base_mod_long_names'])
@@ -119,16 +120,6 @@ def encode_mods_in_bam(args):
         seq = a.get_forward_sequence()
         # and base probabilities matching the read sequence
         if rna: modbaseprobNorm = modbaseprobNorm[::-1]
-        '''# not needed since mappy2sam always returns soft-clipped algs
-        # trim hard-clipped bases from modbaseprobs
-        if a.is_reverse: 
-            se = a.cigar[0][1] if a.cigar[0][0]==5 else None
-            ss = a.cigar[-1][1] if a.cigar[-1][0]==5 else 0
-        else:
-            ss = a.cigar[0][1] if a.cigar[0][0]==5 else 0
-            se = a.cigar[-1][1] if a.cigar[-1][0]==5 else None
-        modbaseprobNorm = modbaseprobNorm[ss:se]
-        '''
         # store original qualities
         if oq_tag: a.set_tag(oq_tag, a.qual)
         # store read group
@@ -219,12 +210,10 @@ def mod_encode(outdir, indirs, fasta, threads, rna, sensitive,
         logger("We'll use basecall information from Fast5 files...")
     # load reference for mappy
     logger("Loading reference index from %s..."%fasta)
+    kwargs = {"preset": "spliced" if rna else "map-ont", "k": 13}
     if sensitive:
-        kwargs = {"k": 6, "w": 3, #"u": "f", 
-                  "min_cnt": 1, "min_chain_score": 13, "min_dp_score": 20, 
-                  "scoring": [1, 1, 1, 1]}
-    else:
-        kwargs = {"preset": "spliced" if rna else "map-ont", "k": 13}
+        kwargs.update({"k": 6, "w": 3, "scoring": [1, 1, 1, 1, 32, 0], 
+                       "min_cnt": 1, "min_chain_score": 13, "min_dp_score": 20})
     aligner = mappy.Aligner(fasta, **kwargs)
     # start pool of workers
     # it's important to initialise the pool with aligner object as it can't be pickled

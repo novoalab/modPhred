@@ -53,6 +53,7 @@ def basecall_and_align(fn, header, rna, conf, MD=False, only_signal=False):
     thr_buf = mappy.ThreadBuffer()
     # get basecalled reads from either guppy server or basecalled Fast5 file
     for read_id, seq, qseq, sig, move, modbaseprob, md in basecalled_reads:
+        if rna: seq = seq.replace("U", "T")
         # iterate hits
         primary_count = 0
         for hit in aligner.map(seq, buf=thr_buf, MD=MD): 
@@ -118,7 +119,12 @@ def get_read_data_basecall(fn, client, _get_read_data, batch_size=100):
     read2sig = {}
     # submit all reads
     for ri, read in enumerate(yield_reads(fn), 1):
-        client.pass_read(read)
+        # zmq.error.Again: Resource temporarily unavailable
+        try:
+            client.pass_read(read)
+        except:
+            time.sleep(0.1)#; print('retrying pass_read()')
+            client.pass_read(read)
         # store signal - v0.0.6 doesn't report raw data
         read2sig[read.read_id] = read.signal # read.daq_scaling*(read.signal+read.daq_offset)
         # grab basecalled reads in batches (initially there will be none)
@@ -203,7 +209,12 @@ def _get_completed_reads(client, trace=True, state=False):
     while res is not None:
         read, called = res
         while not called.complete:
-            _, block = client.send(SimpleRequestType.GET_NEXT_CALLED_BLOCK, data=read.read_tag)
+            # zmq.error.Again: Resource temporarily unavailable
+            try:
+                _, block = client.send(SimpleRequestType.GET_NEXT_CALLED_BLOCK, data=read.read_tag)
+            except:
+                time.sleep(0.1)
+                _, block = client.send(SimpleRequestType.GET_NEXT_CALLED_BLOCK, data=read.read_tag)                
             called += block
         # store read
         reads.append((read, called))

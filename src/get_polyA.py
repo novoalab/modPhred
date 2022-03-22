@@ -59,7 +59,9 @@ def get_polyA_boundary(sig_all, md, read_pos, read_start_trim, rname, plot_read=
     """
     s = e = 0
     flt = "FAIL"
-    sig = sig_all[:read_pos[read_start_trim+include_bases]] # 219 ns  
+    # this causes errors for very short reads --sensitive
+    _bases = read_start_trim+include_bases if read_start_trim+include_bases<len(read_pos) else len(read_pos)-1
+    sig = sig_all[:read_pos[_bases]] # 219 ns
     sig_pA = (sig+md['daq_offset'])*md['daq_scaling'] # 8.32 µs; 28.6 µs for the whole read
     sig_norm = (sig_pA-md["median"])/md["med_abs_dev"] # 7.41 µs; 226.3 µs for the whole read
     # compute running mean differences
@@ -83,7 +85,7 @@ def get_polyA_boundary(sig_all, md, read_pos, read_start_trim, rname, plot_read=
         stalls = [(s, e) for s, e in merged_stalls if 0<sig_norm[s:e].mean()<3
                   and s>read_pos[read_start_trim]/10 # polyA start not before first_base/10
                   and 3*(e-s)>abs(read_pos[read_start_trim]-e) # polyA distance to first base < 3*polyA length
-                  and e!=read_pos[read_start_trim+include_bases] # polyA ending at include_bases
+                  and e!=read_pos[_bases] # polyA ending at include_bases
                   ]
     if len(stalls):
         s, e = sorted(stalls, key=lambda x: x[1]-x[0])[-1]

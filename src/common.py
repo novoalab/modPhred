@@ -103,5 +103,11 @@ def get_alphabet(output_alphabet, mods, canonical_bases="ACGTU", force_rna=0):
         for mb in canonical2mods[b]:
             base2positions[b].append(idx)
             idx += 1
+    # get rid of U in RNA
+    if "U" in canonical2mods:
+        for d in (canonical2mods, base2positions):
+            d["T"] = d["U"]
+            del d["U"]
+        alphabet[alphabet.index("U")] = "T"
     #print(bases, alphabet, symbol2modbase, canonical2mods, base2positions)
     return alphabet, symbol2modbase, canonical2mods, base2positions
