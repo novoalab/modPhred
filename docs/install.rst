@@ -26,7 +26,7 @@ Make sure you install all programs listed below, before runnning the pipeline.
 
 .. code-block:: bash
 
-   pip install h5py matplotlib pysam pandas seaborn
+   pip install h5py matplotlib pysam pandas seaborn sklearn
 
 * guppy_basecaller has to be obtained from `Nanopore Tech. Software page <https://community.nanoporetech.com/downloads>`_
   Alternatively, you can try `this for GPU <https://mirror.oxfordnanoportal.com/software/analysis/ont-guppy_4.0.15_linux64.tar.gz>`_
@@ -35,11 +35,11 @@ Make sure you install all programs listed below, before runnning the pipeline.
   Check `my blog for instructions for Ubuntu 18.04 <https://medium.com/@lpryszcz/containers-with-cuda-support-5467f393649f>`_
   or `NVIDIA CUDA website for other systems <https://docs.nvidia.com/cuda/cuda-installation-guide-linux/index.html>`_.
 
-* pyguppyclient (this will work with guppy v4.0 - v4.3)
+* pyguppyclient (this will work with guppy v3.6.1)
 
 .. code-block:: bash
 
-   pip install pyguppyclient==0.0.7a1
+   pip install pyguppyclient==0.0.6
 
 Once you have all dependencies installed,
 we recommend to try running it with :doc:`test dataset <test>`.
