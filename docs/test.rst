@@ -31,7 +31,9 @@ Running entire modPhred pipeline with live basecalling (~6 minutes using RTX2080
 .. code-block:: bash
 
    acc=PRJEB22772
-   ~/src/modPhred/run -f ref/ECOLI.fa -o modPhred/$acc -i $acc/* -t4 --host ~/src/ont-guppy_3.6.1/bin/guppy_basecall_server
+   ~/src/modPhred/run -f ref/ECOLI.fa -o modPhred/$acc -i $acc/* -t4 \
+       -c dna_r9.4.1_450bps_modbases_dam-dcm-cpg_hac.cfg \
+       --host ~/src/ont-guppy_3.6.1/bin/guppy_basecall_server
    
 Note, you can enable automatic removal of intermediate files (FastQ/M) using ``--cleanup``.
 
@@ -39,7 +41,9 @@ Instead you can run all steps one-by-one as follow:
 
 .. code-block:: bash
 
-   ~/src/modPhred/src/guppy_encode_live.py -i $acc/* -o modPhred/$acc --host ~/src/ont-guppy_3.6.1/bin/guppy_basecall_server
+   ~/src/modPhred/src/guppy_encode_live.py -i $acc/* -o modPhred/$acc
+       -c dna_r9.4.1_450bps_modbases_dam-dcm-cpg_hac.cfg \
+       --host ~/src/ont-guppy_3.6.1/bin/guppy_basecall_server
    ~/src/modPhred/src/guppy_align.py -f ref/ECOLI.fa -o modPhred/$acc -i modPhred/$acc/reads/*
    ~/src/modPhred/src/mod_report.py -f ref/ECOLI.fa -o modPhred/$acc -i $acc/*
    ~/src/modPhred/src/mod_plot.py -i modPhred/$acc/mod.gz

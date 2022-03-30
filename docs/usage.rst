@@ -36,7 +36,10 @@ All you need to do is to provide path to ``guppy_basecall_server`` using ``--hos
 
 .. code-block:: bash
 
-   ~/src/modPhred/run --host ~/src/ont-guppy_4.0.15/bin/guppy_basecall_server -f reference.fasta -o modPhred/projectName -i input_fast5_folder1 [input_fast5_folder2 ... input_fast5_folderN]
+   ~/src/modPhred/run -f reference.fasta -o modPhred/projectName \
+       -i input_fast5_folder1 [input_fast5_folder2 ... input_fast5_folderN] \
+       -c dna_r9.4.1_450bps_modbases_dam-dcm-cpg_hac.cfg \
+       --host ~/src/ont-guppy_4.0.15/bin/guppy_basecall_server
 
 Alternatively, if guppy_basecall_server is already running in your machine, you can provide just its port using --host localhost --port.
 
@@ -47,7 +50,10 @@ All you need to do is to provide IP address ``--host`` and port ``--port``
 
 .. code-block:: bash
 
-   ~/src/modPhred/run --host 172.21.11.186 --port 5555 -f reference.fasta -o modPhred/projectName -i input_fast5_folder1 [input_fast5_folder2 ... input_fast5_folderN]
+   ~/src/modPhred/run -f reference.fasta -o modPhred/projectName \
+       -i input_fast5_folder1 [input_fast5_folder2 ... input_fast5_folderN] \
+       -c dna_r9.4.1_450bps_modbases_dam-dcm-cpg_hac.cfg \
+       --host 172.21.11.186 --port 5555
 
 Without basecalling
 -------------------
@@ -57,7 +63,8 @@ Running modPhred pipeline is as easy as:
 
 .. code-block:: bash
 
-   ~/src/modPhred/run -f reference.fasta -o modPhred/projectName -i input_fast5_folder1 [input_fast5_folder2 ... input_fast5_folderN]
+   ~/src/modPhred/run -f reference.fasta -o modPhred/projectName \
+       -i input_fast5_folder1 [input_fast5_folder2 ... input_fast5_folderN]
 
 For more usage examples, please have a look in :doc:`test dataset <test>`.
 
@@ -89,6 +96,22 @@ it means your Fast5 is basecalled with modificatoins.
    ...
 
 
+Using custom-modifications models
+---------------------------------
+ModPhred supports DNA and RNA modification-aware guppy models.
+If you wish to use ``my_custom_model.cfg`` model, 
+first copy ``.cfg`` and ``.jsn`` files to guppy ``/data`` directory
+(ie. ``~/src/ont-guppy_4.0.15/data``) along other basecalling models.
+Then execute modPhred as follows: 
+
+.. code-block:: bash
+
+   ~/src/modPhred/run -f reference.fasta -o modPhred/projectName \
+       -i input_fast5_folder1 [input_fast5_folder2 ... input_fast5_folderN] \
+       -c my_custom_model.cfg \
+       --host ~/src/ont-guppy_4.0.15/bin/guppy_basecall_server
+
+   
 Processing (very) large datasets
 --------------------------------
 There are several ways of speeding up entire analysis for very large datasets.
