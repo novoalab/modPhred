@@ -20,13 +20,20 @@ Make sure you install all programs listed below, before runnning the pipeline.
 
 .. code-block:: bash
 
+   conda create -y -n modPhred python=3.7
+   conda activate modPhred
    conda install minimap2 samtools hdf5 wget
 
 * from `pip <https://pypi.org/project/pip/>`_
 
 .. code-block:: bash
 
-   pip install h5py matplotlib pysam pandas seaborn sklearn
+   # create & activate new virtual environment
+   mkdir -p ~/src/venv
+   python3 -m venv ~/src/venv/modPhred
+   source ~/src/venv/modPhred/bin/activate
+   
+   pip install h5py matplotlib pysam pandas seaborn sklearn mappy pebble numba
 
 * guppy_basecaller has to be obtained from `Nanopore Tech. Software page <https://community.nanoporetech.com/downloads>`_
   Alternatively, you can try `this for GPU <https://mirror.oxfordnanoportal.com/software/analysis/ont-guppy_4.0.15_linux64.tar.gz>`_

@@ -290,7 +290,8 @@ def get_covered_regions_per_bam(bams, threads=4, mapq=15, mincov=1, verbose=1, c
     return regions
     
 def mod_report(outfn, bam, fasta, threads, regionsfn, MaxPhredProb, can2mods,
-               mapq=15, minDepth=25, minModFreq=0.1, minModProb=0.5, logger=sys.stderr.write):
+               mapq=15, minDepth=25, minModFreq=0.1, minModProb=0.5,
+               chrs=[], logger=sys.stderr.write):
     """Get modifications from bam files"""
     logger("Reporting positions that are likely modified to %s ..."%outfn)
     # write header
@@ -303,7 +304,7 @@ def mod_report(outfn, bam, fasta, threads, regionsfn, MaxPhredProb, can2mods,
     if regionsfn:
         regions = load_bed(regionsfn)
     else:
-        regions = get_covered_regions_per_bam(bam, threads, mapq, minDepth)
+        regions = get_covered_regions_per_bam(bam, threads, mapq, minDepth, chrs=chrs)
     logger("  %s regions to process..."%len(regions))
     # define imap, either pool of processes or map
     if threads<2:
@@ -400,6 +401,7 @@ def main():
     parser.add_argument("--minModFreq", default=0.05, type=float, help="min modification frequency per position [%(default)s]")
     parser.add_argument("--minModProb", default=0.50, type=float, help="min modification probability per base [%(default)s]")
     parser.add_argument("-b", "--bed", help="BED file with regions to analyse [optionally]")
+    parser.add_argument("--chr", default=[], nargs="+", help="chromosome(s) to process [all]")
     #parser.add_argument("-b", "--minBA", default=0.0, type=float, help="min basecall accuracy [%(default)s]")
     #parser.add_argument("-m", "--minModMeanProb", default=0.05, type=float, help="min modification mean probability [%(default)s]")
     parser.add_argument("-s", "--storeQuals", action='store_true', help="store base qualities in BAM [%(default)s]")
@@ -436,6 +438,8 @@ def main():
     mod_align(fastq_dirs, o.fasta, o.outdir, o.threads, o.recursive, o.storeQuals)
     # process everything only if outfile does not exists
     outfn = os.path.join(o.outdir, "mod.gz")
+    if o.chr:
+        outfn += "."+",".join(o.chr)+".gz"
     if not os.path.isfile(outfn):
         # load info
         data = load_info(o.outdir)
@@ -458,10 +462,15 @@ def main():
         if "U" in can2mods:
             can2mods["T"] = can2mods["U"]
         mod_report(outfn, bamfiles, o.fasta, o.threads, o.bed, MaxPhredProb, can2mods, 
-                   o.mapq, o.minDepth, o.minModFreq, o.minModProb, logger=logger)
+                   o.mapq, o.minDepth, o.minModFreq, o.minModProb,
+                   o.chr, logger=logger)
     else:
         logger(" %s exists!\n"%outfn)
-
+        
+    if o.chr:
+        logger("Merge mod.gz files and run modPhred without --chr parameter")
+        sys.exit(0)
+        
     # load data
     logger("Loading modification data...")
     data = pd.read_csv(outfn, sep="\t", header=len(HEADER.split('\n'))-2, index_col=False)
@@ -473,8 +482,8 @@ def main():
     # plot pairwise plots - those will affect column names therefore has to be done at the end
     try:
         # skip pairplots if more than 4 samples
-        if len(o.indirs)>4:
-            logger("More than 4 samples: pairwise plots skipped. To generate them, execute:")
+        if len(o.indirs)>3:
+            logger("More than 3 samples: pairwise plots skipped. To generate them, execute:")
             logger(" src/mod_plot.py --scatter -i %s"%outfn)
         elif len(o.indirs)>1:
             mod_plot.plot_scatter(outfn, data=data)

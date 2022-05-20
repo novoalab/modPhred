@@ -68,6 +68,7 @@ def get_basecalled_reads_data(fn, client, _get_read_data):
 
     This implementation is >10x faster than using GuppyBasecallerClient.basecall()
     """
+    ri = 0
     reads = []
     # submit all reads
     for ri, read in enumerate(yield_reads(fn), 1):
