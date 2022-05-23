@@ -80,7 +80,7 @@ Citation
 --------
 If you find this work useful, please cite:
 
-Pryszcz LP and Novoa EM (2022). ModPhred: an integrative toolkit for the analysis
+Pryszcz LP and Novoa EM (2022) ModPhred: an integrative toolkit for the analysis
 and storage of nanopore sequencing DNA and RNA modification data.
 `Bioinformatics, 38:257-260 <http://dx.doi.org/10.1093/bioinformatics/btab539>`_.
 
