@@ -79,7 +79,10 @@ For more information, `check Wikipedia <https://en.wikipedia.org/wiki/Pszczyna>`
 Citation
 --------
 If you find this work useful, please cite:
-`Pryszcz LP and Novoa EM. ModPhred: an integrative toolkit for the analysis and storage of nanopore sequencing DNA and RNA modification data. bioRxiv 2021, 437220 <https://www.biorxiv.org/content/10.1101/2021.03.26.437220v1>`_.
+
+Pryszcz LP and Novoa EM (2022). ModPhred: an integrative toolkit for the analysis
+and storage of nanopore sequencing DNA and RNA modification data.
+`Bioinformatics, 38:257-260 <http://dx.doi.org/10.1093/bioinformatics/btab539>`_.
 
 Please, consider citing :doc:`dependencies <install>` as well.
 

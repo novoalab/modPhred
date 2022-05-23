@@ -14,7 +14,9 @@ The pipeline consists of four steps / modules:
 For more information, please visit full documentation at https://modphred.readthedocs.io. 
 
 ## Citation 
-If you find this work useful, please cite: Pryszcz LP and Novoa EM. ModPhred: an integrative toolkit for the analysis and storage of nanopore sequencing DNA and RNA modification data. bioRxiv 2021, 437220. 
+If you find this work useful, please cite:
 
-URL link: https://www.biorxiv.org/content/10.1101/2021.03.26.437220v1
+Pryszcz LP and Novoa EM (2022). ModPhred: an integrative toolkit for the analysis
+and storage of nanopore sequencing DNA and RNA modification data.
+[Bioinformatics, 38:257-260](http://dx.doi.org/10.1093/bioinformatics/btab539).
 
