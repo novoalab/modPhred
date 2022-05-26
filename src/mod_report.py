@@ -103,9 +103,9 @@ def is_qcfail(a, mapq=15, flag=1792): #
         return True
     return False
 
-def bam2calls(bam, ref, start, end, mapq, minModProb, MaxPhredProb):
+def bam2calls(sam, ref, start, end, mapq, minModProb, MaxPhredProb):
     """Generator of basecalls and mod qualities from BAM file encoded as floats for +/- strand"""
-    sam = pysam.AlignmentFile(bam)
+    #sam = pysam.AlignmentFile(bam)
     # prepare storage for quals -- this can be memory & speed optimised
     quals = [[[] for x in range(end-start+1)], [[] for x in range(end-start+1)]]
     # stop if ref not in sam file
@@ -138,8 +138,8 @@ def bam2calls(bam, ref, start, end, mapq, minModProb, MaxPhredProb):
         for i in range(2):
             yield quals[i][p]
         p += 1
-    
-def fasta2bases(fastafn, ref, start, end, strands="+-"):
+           
+def fasta2bases(faidx, ref, start, end):
     """Generator of individual bases from FastA file.
 
     The output consists of: 
@@ -149,21 +149,18 @@ def fasta2bases(fastafn, ref, start, end, strands="+-"):
     - base (complement for -)
     - base index in alphabet (relative to + strand)
     """
-    fasta = pysam.FastaFile(fastafn)
-    if ref not in fasta.references:
+    if ref not in faidx:
         raise StopIteration
-    for pos, refbase in enumerate(fasta.fetch(ref, start, end), start+1):
-        refbase = refbase.upper()
+    seq = faidx.fetch(ref, start, end).upper()
+    for pos, refbase in enumerate(seq, start+1):
         # update refbase and get appropriate cols
         if refbase in base2index:
             refi = base2index[refbase]
         else:
             sys.stderr.write("[WARNING] %s:%s %s not in alphabet (%s). Marking as N.\n"%(ref, pos, refbase, alphabet))
             refbase, refi = "N", 0 # N
-        for si, strand in enumerate(strands):
-            if si:
-                refbase = base2complement[refbase]
-            yield pos, si, strand, refbase, refi
+        yield pos, 0, "+", refbase, refi
+        yield pos, 1, "-", base2complement[refbase], refi
 
 def get_modCount(strand_calls, bams, maxNmods, MaxPhredProb, minModProb):
     """Return modCount array that count for each bam and every base
@@ -188,7 +185,7 @@ def get_modCount(strand_calls, bams, maxNmods, MaxPhredProb, minModProb):
     return modCount, probs
         
 def get_calls(position, fasta, bams, MaxPhredProb, can2mods,
-              mapq=15, minDepth=25, minModFreq=0.01, minModProb=0.5, strands = "+-"):
+              mapq=15, minDepth=25, minModFreq=0.01, minModProb=0.5):
     """Return modified positions from given region"""
     # get region info
     ref, start, end = position
@@ -196,8 +193,10 @@ def get_calls(position, fasta, bams, MaxPhredProb, can2mods,
     posinfo = "%s\t%s\t%s>%s%s"
     # get actual max no of modifications per base
     maxNmods = max(map(len, can2mods.values())) 
-    refparser = fasta2bases(fasta, ref, start, end, strands)
-    parsers = [bam2calls(bam, ref, start, end, mapq, minModProb, MaxPhredProb) for bam in bams]
+    # init faidx and sam once and reuse - this saves ~0.2s per region per BAM
+    ## to it via init_args and global args
+    refparser = fasta2bases(faidx, ref, start, end)
+    parsers = [bam2calls(sam, ref, start, end, mapq, minModProb, MaxPhredProb) for sam in sams]
     for data in zip(refparser, *parsers):
         (pos, si, strand, refbase, refi) = data[0]
         calls = data[1:]
@@ -289,6 +288,13 @@ def get_covered_regions_per_bam(bams, threads=4, mapq=15, mincov=1, verbose=1, c
             regions.append((ref, s, e)) #yield ref, s, e
     return regions
     
+def init_args(*args):
+    """Share globals with pool of workers"""
+    global sams, faidx
+    bams, fasta = args
+    sams = [pysam.AlignmentFile(bam) for bam in bams]
+    faidx = pysam.FastaFile(fasta)
+
 def mod_report(outfn, bam, fasta, threads, regionsfn, MaxPhredProb, can2mods,
                mapq=15, minDepth=25, minModFreq=0.1, minModProb=0.5,
                chrs=[], logger=sys.stderr.write):
@@ -307,17 +313,12 @@ def mod_report(outfn, bam, fasta, threads, regionsfn, MaxPhredProb, can2mods,
         regions = get_covered_regions_per_bam(bam, threads, mapq, minDepth, chrs=chrs)
     logger("  %s regions to process..."%len(regions))
     # define imap, either pool of processes or map
-    if threads<2:
-        imap = map
-        np.seterr(all='ignore') # ignore all warnings
-    else:
-        p = Pool(threads, maxtasksperchild=10)
-        imap = p.imap
+    p = Pool(threads, initializer=init_args, initargs=(bam, fasta), maxtasksperchild=100)
     # start genotyping
     i = 0
-    parser = imap(worker, ((pos, fasta, bam, MaxPhredProb, can2mods,
-                            mapq, minDepth, minModFreq, minModProb)
-                           for pos in regions))
+    parser = p.map(worker, ((pos, fasta, bam, MaxPhredProb, can2mods,
+                             mapq, minDepth, minModFreq, minModProb)
+                            for pos in regions))
     for i, data in enumerate(parser, 1):
         sys.stderr.write(" %s / %s [memory: %7.1f Mb]\r"%(i, len(regions), memory_usage()))
         out.write(data)
@@ -468,7 +469,7 @@ def main():
         logger(" %s exists!\n"%outfn)
         
     if o.chr:
-        logger("Merge mod.gz files and run modPhred without --chr parameter")
+        logger("Merge mod.gz `src/modPhred/src/merge_chr.py %s/mod.gz.chr*.gz` and run modPhred without --chr parameter"%o.outdir)
         sys.exit(0)
         
     # load data

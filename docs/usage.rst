@@ -118,6 +118,24 @@ There are several ways of speeding up entire analysis for very large datasets.
 
 * modEncode: process each sample or (or even subsets of each run) separately using guppy_encove_live.py. Ideally, each subset will be processed on dedicated GPU (local or remote). Here, providing more than 6 cores per job brings no improvement, since modEncode is primarily GPU-bound.
 * modAlign: no much can be done, since every sample has to produce one BAM file.
-* Beside, modAlign is by far the fastest step.
+  Beside, modAlign is by far the fastest step.
 * modReport: process each chromsome (or even subsets of chromosome) as separate job. Make sure to provide as many cores as possible to each job.
 
+
+.. code-block:: bash
+
+   # run mod_encode
+   ~/src/modPhred/src/guppy_encode_live.py
+   
+   # run mod_report
+   ~/src/modPhred/run -o outdir [...] --chr chr1
+   ~/src/modPhred/run [...] --chr chr2
+   ...
+   ~/src/modPhred/run [...] --chr chrN
+   
+   # combine the results for individual chromosomes
+   ~/src/modPhred/src/merge_chr.py outdir/mod.gz.chr*.gz
+   
+   # rerun modPhred without --chr to generate missing result files
+   ~/src/modPhred/run -o outdir [...]
+   

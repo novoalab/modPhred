@@ -2,7 +2,7 @@
 
 ```bash
 cd ~/src/modPhred/dockerfiles/3.6.1
-version=$(~/src/modPhred/run --version 2> /dev/null)
+version=$(../../run --version 2> /dev/null)
 guppyversion=$(basename $PWD)
 name=modphred-$guppyversion
 echo $name:$version
