@@ -16,6 +16,14 @@ This will produce plots similar to this one
    :align: center
    :width: 100%
 
+You can specify regions of interest using ``-r``,
+for example if you want to cluster reads that aligned to
+chr1 at positions between 100 and 200 on the + strand, you'd run it as follows:
+
+.. code-block:: bash
+
+   ~/src/modPhred/src/mod_cluster.py --minfreq 0.01 -i mod.gz -e pdf -r chr1:100-200+
+
 
 Clustering details
 ------------------
