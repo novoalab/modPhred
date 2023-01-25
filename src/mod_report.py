@@ -407,6 +407,7 @@ def main():
     #parser.add_argument("-m", "--minModMeanProb", default=0.05, type=float, help="min modification mean probability [%(default)s]")
     parser.add_argument("-s", "--storeQuals", action='store_true', help="store base qualities in BAM [%(default)s]")
     parser.add_argument("-t", "--threads", default=6, type=int, help="number of cores to use [%(default)s]")
+    parser.add_argument("-u", "--unspliced", action='store_true', help="don't use spliced alignment for RNA")
     parser.add_argument("--cleanup", action='store_true', help="remove FastQ/M files [%(default)s]")
     parser.add_argument("--MaxModsPerBase", default=MaxModsPerBase, type=int, help=argparse.SUPPRESS)
     fast5 = parser.add_argument_group("Basecalled Fast5 options")
@@ -436,7 +437,8 @@ def main():
         fastq_dirs = guppy_encode.mod_encode(o.outdir, o.indirs, o.threads, o.basecall_group,
                                              o.MaxModsPerBase, o.recursive)
     # align
-    mod_align(fastq_dirs, o.fasta, o.outdir, o.threads, o.recursive, o.storeQuals)
+    mod_align(fastq_dirs, o.fasta, o.outdir, o.threads, o.recursive, o.storeQuals,
+              o.unspliced)
     # process everything only if outfile does not exists
     outfn = os.path.join(o.outdir, "mod.gz")
     if o.chr:

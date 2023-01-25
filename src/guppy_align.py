@@ -29,11 +29,10 @@ def run_minimap2(ref, fastq, outfn, threads=1, storeQuals=False, spliced=1,
     """Run minimap2 and sort bam on-the-fly"""
     mode = ["-axmap-ont", ]
     if spliced:
-        mode = ["-axsplice", "-k13"] #-uf 
+        mode = ["-axsplice", ] #-uf 
     # -k7 -w5 -m20 -A3 -B1 - very sensitive alignment
     args1 = ["minimap2", "-t%s"%threads, ref] + fastq + mode
-    if sensitive:
-        args1 += ["-k7", "-w5", "-m20", "-A3", "-B1"]
+    args1 += ["-k7", "-w5", "-m20", "-A3", "-B1"] if sensitive  else ["-k13", ]
     # add query FastQ files
     #args1 += glob.glob(fastq)
     proc1 = subprocess.Popen(args1, stdout=subprocess.PIPE, stderr=open(outfn[:-4]+".log", "w"))
@@ -50,7 +49,8 @@ def run_minimap2(ref, fastq, outfn, threads=1, storeQuals=False, spliced=1,
     proc2.wait()
     proc2.terminate()
 
-def mod_align(indirs, ref, outdir, threads, recursive=False, storeQuals=False, bamdir="minimap2"):
+def mod_align(indirs, ref, outdir, threads, recursive=False, storeQuals=False,
+              unspliced=False, bamdir="minimap2"):
     """Align *.fq.gz files from input dirs and store sorted .bam in outdir/minimap2"""
     logger("Aligning FastQ files from %s directories...\n"%len(indirs))
     # prepare output directory
@@ -70,7 +70,9 @@ def mod_align(indirs, ref, outdir, threads, recursive=False, storeQuals=False, b
             fq = sorted(map(str, Path(indir).rglob('*.fastm.gz')))
         else:
             fq = sorted(map(str, Path(indir).glob('*.fastm.gz')))
-        run_minimap2(ref, fq, outfn, threads, storeQuals, spliced=is_rna(indir))
+        # use spliced alignemnt only if RNA AND unspliced=False
+        spliced = is_rna(indir) & (not unspliced)
+        run_minimap2(ref, fq, outfn, threads, storeQuals, spliced=spliced)
         # update dump info
         dump_updated_info(indir, outdir, outfn)
 
@@ -130,7 +132,8 @@ def main():
     parser.add_argument("-f", "--fasta", required=1, type=argparse.FileType('r'), help="reference FASTA file")
     parser.add_argument("-o", "--outdir", default="modPhred", help="output directory [%(default)s]")
     parser.add_argument("-r", "--recursive", action='store_true', help="recursive processing of input directories [%(default)s]")
-    parser.add_argument("-s", "--storeQuals", action='store_true', help="store base qualities in BAM [%(default)s]")
+    parser.add_argument("-s", "--storeQuals", action='store_true', help="store base qualities in BAM")
+    parser.add_argument("-u", "--unspliced", action='store_true', help="don't use spliced alignment for RNA")
 
     o = parser.parse_args()
     if o.verbose:
@@ -139,7 +142,8 @@ def main():
     o.fasta = o.fasta.name
 
     # get alignments
-    mod_align(o.indirs, o.fasta, o.outdir, o.threads, o.recursive, o.storeQuals)
+    mod_align(o.indirs, o.fasta, o.outdir, o.threads, o.recursive, o.storeQuals,
+              o.unspliced)
     
 if __name__=='__main__': 
     t0 = datetime.now()
