@@ -297,7 +297,7 @@ def init_args(*args):
 
 def mod_report(outfn, bam, fasta, threads, regionsfn, MaxPhredProb, can2mods,
                mapq=15, minDepth=25, minModFreq=0.1, minModProb=0.5,
-               chrs=[], logger=sys.stderr.write):
+               chrs=[], step=20000, logger=sys.stderr.write):
     """Get modifications from bam files"""
     logger("Reporting positions that are likely modified to %s ..."%outfn)
     # write header
@@ -310,7 +310,8 @@ def mod_report(outfn, bam, fasta, threads, regionsfn, MaxPhredProb, can2mods,
     if regionsfn:
         regions = load_bed(regionsfn)
     else:
-        regions = get_covered_regions_per_bam(bam, threads, mapq, minDepth, chrs=chrs)
+        regions = get_covered_regions_per_bam(bam, threads, mapq, minDepth,
+                                              chrs=chrs, step=step)
     logger("  %s regions to process..."%len(regions))
     # define imap, either pool of processes or map
     p = Pool(threads, initializer=init_args, initargs=(bam, fasta), maxtasksperchild=100)
@@ -406,6 +407,7 @@ def main():
     #parser.add_argument("-b", "--minBA", default=0.0, type=float, help="min basecall accuracy [%(default)s]")
     #parser.add_argument("-m", "--minModMeanProb", default=0.05, type=float, help="min modification mean probability [%(default)s]")
     parser.add_argument("-s", "--storeQuals", action='store_true', help="store base qualities in BAM [%(default)s]")
+    parser.add_argument("--step", type=int, default=20000, help="region size [%(default)s]")
     parser.add_argument("-t", "--threads", default=6, type=int, help="number of cores to use [%(default)s]")
     parser.add_argument("-u", "--unspliced", action='store_true', help="don't use spliced alignment for RNA")
     parser.add_argument("--cleanup", action='store_true', help="remove FastQ/M files [%(default)s]")
@@ -466,7 +468,7 @@ def main():
             can2mods["T"] = can2mods["U"]
         mod_report(outfn, bamfiles, o.fasta, o.threads, o.bed, MaxPhredProb, can2mods, 
                    o.mapq, o.minDepth, o.minModFreq, o.minModProb,
-                   o.chr, logger=logger)
+                   o.chr, o.step, logger=logger)
     else:
         logger(" %s exists!\n"%outfn)
         
