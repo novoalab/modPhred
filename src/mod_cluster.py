@@ -140,17 +140,19 @@ def get_data_for_regions(data, regions):
         strands.append(strand)
     return regions, regionsData, strands
         
-def mod_cluster(infn, args, data=False, ext="png", logger=logger, read_strand_lut = {"+": "r", "-": "b"}):
+def mod_cluster(outdir, infn, bamfiles, args, data=False, ext="png", logger=logger, read_strand_lut = {"+": "r", "-": "b"}):
     """Cluster reads base on their modification profiles"""
     regions = args.regions
-    outdir = os.path.join(os.path.dirname(infn), "clusters")
+    if not outdir:
+        outdir = os.path.join(os.path.dirname(infn), "clusters")
     if not os.path.isdir(outdir):
         os.makedirs(outdir)
     # load info
     moddata = load_info(os.path.dirname(infn))
     MaxPhredProb = moddata["MaxPhredProb"]
-    bamfiles = moddata["bam"]
-    bamfiles.sort()
+    if not bamfiles:
+        bamfiles = moddata["bam"]
+        bamfiles.sort()
     # BAM > modifications
     # get can2mods ie {'A': ['6mA'], 'C': ['5mC'], 'G': [], 'T': []}
     can2mods = {b: [moddata["symbol2modbase"][m] for m in mods]
@@ -277,6 +279,8 @@ def main():
     parser.add_argument('--version', action='version', version=VERSION)   
     parser.add_argument("-v", "--verbose", action="store_true", help="verbose")    
     parser.add_argument("-i", "--input", default="modPhred/mod.gz", help="input file [%(default)s]")
+    parser.add_argument("-o", "--outdir", default="modPhred/correlations", help="output dir [%(default)s]")
+    parser.add_argument("-b", "--bams", default=[], nargs="*", help="input BAMs [read from mod.gz]")
     parser.add_argument("-m", "--mapq", default=15, type=int, help="min mapping quality [%(default)s]")
     parser.add_argument("-d", "--mindepth", default=25, type=int, help="min depth of coverage [%(default)s]")
     parser.add_argument("--maxDepth", default=100, type=int, help="max depth of coverage [%(default)s]")
@@ -300,7 +304,7 @@ def main():
     if not o.regions:
         logger("Processing entire chromosomes - consider narrowing to certain regions!")
         
-    mod_cluster(o.input, args=o, ext=o.ext)
+    mod_cluster(o.outdir, o.input, o.bams, args=o, ext=o.ext)
     logger("Finished\n")
 
 if __name__=='__main__': 

@@ -11,7 +11,7 @@ import glob, gzip, os, pickle, pysam, sys, zlib
 from collections import Counter
 from datetime import datetime
 from multiprocessing import Pool
-from  matplotlib import pyplot as plt
+from matplotlib import pyplot as plt
 import numpy as np
 import pandas as pd
 import seaborn as sns
@@ -195,16 +195,20 @@ def get_data_for_regions(data, regions):
         regionsData.append(df)
     return regionsData
         
-def mod_correlation(infn, ext="png", logger=logger, data=False, overwrite=False, regions=[], samples=[], 
-                    minfreq=0.20, mindepth=10, minModProb=0.5, mapq=15, strand=None, mod=None):
-    outdir = os.path.join(os.path.dirname(infn), "correlations")
+def mod_correlation(outdir, infn, bamfiles, ext="png", logger=logger, data=False,
+                    overwrite=False, regions=[], samples=[], 
+                    minfreq=0.20, mindepth=10, minModProb=0.5, mapq=15,
+                    strand=None, mod=None):
+    if not outdir:
+        outdir = os.path.join(os.path.dirname(infn), "correlations")
     if not os.path.isdir(outdir):
         os.makedirs(outdir)
     # load info
     moddata = load_info(os.path.dirname(infn))
     MaxPhredProb = moddata["MaxPhredProb"]
-    bamfiles = moddata["bam"]
-    bamfiles.sort()
+    if not bamfiles:
+        bamfiles = moddata["bam"]
+        bamfiles.sort()
     # BAM > modifications
     # get can2mods ie {'A': ['6mA'], 'C': ['5mC'], 'G': [], 'T': []}
     can2mods = {b: [moddata["symbol2modbase"][m] for m in mods]
@@ -319,6 +323,8 @@ def main():
     parser.add_argument('--version', action='version', version=VERSION)   
     parser.add_argument("-v", "--verbose", action="store_true", help="verbose")    
     parser.add_argument("-i", "--input", default="modPhred/mod.gz", help="input file [%(default)s]")
+    parser.add_argument("-o", "--outdir", default="modPhred/correlations", help="output dir [%(default)s]")
+    parser.add_argument("-b", "--bams", default=[], nargs="*", help="input BAMs [read from mod.gz]")
     parser.add_argument("-m", "--mapq", default=15, type=int, help="min mapping quality [%(default)s]")
     parser.add_argument("-d", "--minDepth", default=25, type=int, help="min depth of coverage [%(default)s]")
     parser.add_argument("--minModFreq", default=0.20, type=float, help="min modification frequency per position [%(default)s]")
@@ -336,7 +342,8 @@ def main():
     if not o.regions:
         logger("Processing entire chromosomes - consider narrowing to certain regions!")
         
-    mod_correlation(o.input, ext=o.ext, mapq=o.mapq, overwrite=o.overwrite, regions=o.regions, mod=o.mod, 
+    mod_correlation(o.outdir, o.input, o.bams, ext=o.ext, mapq=o.mapq,
+                    overwrite=o.overwrite, regions=o.regions, mod=o.mod, 
                     minfreq=o.minModFreq, mindepth=o.minDepth, minModProb=o.minModProb)
     logger("Finished\n")
 
