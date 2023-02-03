@@ -98,7 +98,8 @@ Please, consider citing :doc:`dependencies <install>` as well.
    plot
    correlate
    cluster
-
+   scripts
+   
 .. toctree::
    :maxdepth: 3
    :hidden:
