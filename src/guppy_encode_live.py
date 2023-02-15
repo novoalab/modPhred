@@ -182,6 +182,8 @@ def start_guppy_server(host, config, port, device):
                 sys.exit(exitcode)
             time.sleep(0.1)
         host = "localhost"
+    else:
+        logger("Connecting to: %s:%s ..."%(host, port))
     return proc, host, port
 
 def mod_encode(outdir, indirs, threads, config, host, port, MaxModsPerBase=3,
