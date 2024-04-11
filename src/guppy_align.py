@@ -62,6 +62,8 @@ def mod_align(indirs, ref, outdir, threads, recursive=False, storeQuals=False,
     for indir in indirs:
         # run alignment if BAM doesn't exist already
         outfn = os.path.join(outdir, bamdir, os.path.basename(indir)+".bam")
+        # update dump info - we do it even if outfn is present for recomputation
+        dump_updated_info(indir, outdir, outfn)
         if os.path.isfile(outfn):
             logger(" %s already present"%outfn)
             continue
@@ -73,8 +75,6 @@ def mod_align(indirs, ref, outdir, threads, recursive=False, storeQuals=False,
         # use spliced alignemnt only if RNA AND unspliced=False
         spliced = is_rna(indir) & (not unspliced)
         run_minimap2(ref, fq, outfn, threads, storeQuals, spliced=spliced)
-        # update dump info
-        dump_updated_info(indir, outdir, outfn)
 
 def dump_updated_info(indir, outdir, bamfn, fn="modPhred.pkl"):
     """Load data from dump and store updated info.
@@ -88,13 +88,15 @@ def dump_updated_info(indir, outdir, bamfn, fn="modPhred.pkl"):
     if not data:
         data = newdata
         data["bam"] = []
+    # make sure we won't save it multiple times
+    if bamfn in data["bam"]: return
     # add bam file
     data["bam"].append(bamfn)
     data["fast5"].update(newdata["fast5"])
     # dump using pickle
     fname = os.path.join(outdir, fn)
     with open(fname, "wb") as out:
-        pickle.dump(data, out, protocol=pickle.HIGHEST_PROTOCOL)    
+        pickle.dump(data, out, protocol=pickle.HIGHEST_PROTOCOL)
         
 def compare_info(indirs, warnKeys=["version",],
                  errKeys=["MaxModsPerBase", "symbol2modbase", "alphabet"]):

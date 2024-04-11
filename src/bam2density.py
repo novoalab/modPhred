@@ -40,24 +40,28 @@ def get_quals_for_regions(bams, strand2positionFn, boi, mapq=10, baseq=0):
                 bam2quals[bami].append("".join(np.array(list(quals))[sel]))
     return bam2quals
 
-def plot(outdir, mer, probs, N_positions, labels=("A", "m6A"), ext="pdf"):
+def plot(outdir, mer, probs, N_positions, labels=("A", "m6A"), vlines=[], ext="pdf"):
     fig1, ax1 = plt.subplots(figsize=(7, 5))
     fig2, ax2 = plt.subplots(figsize=(7, 5))
     for label, _probs in zip(labels, probs):
         ax1.hist(_probs, bins=31, range=(0, 1), label=label, alpha=0.5)
-        sns.kdeplot(_probs, label=label, ax=ax2) # bw_adjust=0.5,
+        sns.kdeplot(_probs, label=label, ax=ax2)#, bw_adjust=0.1)
     ax1.set_ylabel("Number of reads")
     ax2.set_ylabel("Density")
     for ax in (ax1, ax2):
         ax.set_xlabel("Modification probability")
-        ax.set_title("{} : {} reads from {:,} positions".format(mer, len(probs[0]), N_positions))
+        ax.set_title("{} : {:,} reads from {:,} positions".format(mer, len(probs[0]), N_positions))
         ax.legend()
     # trim X-axis to 0-1
     ax2.set_xlim(0, 1)
+    if vlines:
+        ax1.vlines(vlines, *ax1.get_ylim(), ls=":", color="black", alpha=0.33)
+        ax2.vlines(vlines, *ax2.get_ylim(), ls=":", color="black", alpha=0.33)
     fig1.savefig(os.path.join(outdir, "{}.hist.{}".format(mer, ext)))
     fig2.savefig(os.path.join(outdir, "{}.density.{}".format(mer, ext)))
 
-def bam2density(outdir, bams, bed, mer, samples=[], max_reads=100, log=sys.stderr):
+def bam2density(outdir, bams, bed, mer, samples=[], max_reads=100,
+                vlines=[], log=sys.stderr):
     
     log.write("Creating output directory...\n")
     if not os.path.isdir(outdir):
@@ -77,7 +81,7 @@ def bam2density(outdir, bams, bed, mer, samples=[], max_reads=100, log=sys.stder
     # get probs: quals are 0-30 scaled
     probs = [(np.array(list(quals_merged[i])).view(np.int32) - 33) / 30 for i in range(len(quals))]
     log.write("Plotting...\n")
-    plot(outdir, mer, probs, N_positions, samples)
+    plot(outdir, mer, probs, N_positions, samples, vlines)
 
 def main():
     import argparse
@@ -95,9 +99,11 @@ def main():
                         help="min mapping quality [%(default)s]")
     parser.add_argument("-d", "--maxDepth", default=100, type=int,
                         help="max depth of coverage [%(default)s]")
+    parser.add_argument("--vlines", default=[], type=float, nargs="+", 
+                        help="max depth of coverage [%(default)s]")
     o = parser.parse_args()
 
-    bam2density(o.outdir, o.input, o.bed, o.mer, o.samples, o.maxDepth)
+    bam2density(o.outdir, o.input, o.bed, o.mer, o.samples, o.maxDepth, o.vlines)
 
 if __name__=='__main__': 
     t0 = datetime.now()
