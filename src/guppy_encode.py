@@ -14,8 +14,7 @@ epilog="""Author: l.p.pryszcz+git@gmail.com
 Barcelona, 20/06/2019
 """
 
-import pickle5 as pickle
-import glob, gzip, h5py, os, resource, sys, subprocess, time
+import glob, gzip, h5py, os, pickle, resource, sys, subprocess, time
 from datetime import datetime
 from multiprocessing import Pool
 from pathlib import Path
