@@ -20,7 +20,7 @@ from multiprocessing import Pool
 from pathlib import Path
 import numpy as np
 
-VERSION = '1.0c'
+VERSION = '1.0d'
 # set max 3 modifications per each base
 MaxModsPerBase = 3
 MaxProb = 256
