@@ -18,7 +18,7 @@ For more information, please visit full documentation at https://modphred.readth
 No, ModPhred works with Guppy flip-flip basecalling models (which can be custom trained, e.g. modification-aware basecalling models trained for example, with taiyaki). 
 Unfortunately, ModPhred does not work with Dorado.
 
-**As of March 2024, ONT has deprecated Guppy**. Consequently, as of March 2024, **ModPhred has also become deprecated. **
+**As of March 2024, ONT has deprecated Guppy**. Consequently, as of March 2024, **ModPhred has also become deprecated.**
 We will update this README if in the near future we upgrade ModPhred to support Dorado or alternative basecallers. 
 
 ## Citation 
